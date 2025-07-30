@@ -1,0 +1,17 @@
+# Stock Crawler Cron Jobs
+# 每天凌晨1点执行完整数据同步
+0 1 * * * /opt/stock-crawler/venv/bin/python /opt/stock-crawler/daily_sync.py --mode once >> /opt/stock-crawler/logs/cron.log 2>&1
+
+# 每天上午9点30分（开盘后）更新当日交易数据
+30 9 * * 1-5 /opt/stock-crawler/venv/bin/python /opt/stock-crawler/main.py --mode basic >> /opt/stock-crawler/logs/cron.log 2>&1
+
+# 每天下午3点30分（收盘后）再次更新当日交易数据
+30 15 * * 1-5 /opt/stock-crawler/venv/bin/python /opt/stock-crawler/main.py --mode basic >> /opt/stock-crawler/logs/cron.log 2>&1
+
+# 每周日凌晨2点执行数据清理
+0 2 * * 0 /opt/stock-crawler/venv/bin/python /opt/stock-crawler/data_cleanup.py >> /opt/stock-crawler/logs/cron.log 2>&1
+
+# 每月1号凌晨3点执行完整数据补充（分批处理）
+0 3 1 * * /opt/stock-crawler/venv/bin/python /opt/stock-crawler/complete_data_crawler.py --start 0 --batch 500 >> /opt/stock-crawler/logs/cron.log 2>&1
+0 4 1 * * /opt/stock-crawler/venv/bin/python /opt/stock-crawler/complete_data_crawler.py --start 500 --batch 500 >> /opt/stock-crawler/logs/cron.log 2>&1
+0 5 1 * * /opt/stock-crawler/venv/bin/python /opt/stock-crawler/complete_data_crawler.py --start 1000 --batch 500 >> /opt/stock-crawler/logs/cron.log 2>&1

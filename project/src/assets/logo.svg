@@ -1,0 +1,141 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景渐变 -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8B5CF6;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- AI神经网络渐变 -->
+    <linearGradient id="aiGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#06B6D4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3B82F6;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- 量化数据渐变 -->
+    <linearGradient id="dataGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F59E0B;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#EF4444;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- 发光效果 -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge> 
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- 主要背景圆形 -->
+  <circle cx="60" cy="60" r="55" fill="url(#bgGradient)" opacity="0.95"/>
+  
+  <!-- AI神经网络节点 -->
+  <g id="aiNodes" fill="url(#aiGradient)" opacity="0.8">
+    <!-- 输入层 -->
+    <circle cx="25" cy="35" r="3" filter="url(#glow)"/>
+    <circle cx="25" cy="50" r="3" filter="url(#glow)"/>
+    <circle cx="25" cy="65" r="3" filter="url(#glow)"/>
+    <circle cx="25" cy="80" r="3" filter="url(#glow)"/>
+    
+    <!-- 隐藏层 -->
+    <circle cx="45" cy="30" r="4" filter="url(#glow)"/>
+    <circle cx="45" cy="50" r="4" filter="url(#glow)"/>
+    <circle cx="45" cy="70" r="4" filter="url(#glow)"/>
+    <circle cx="45" cy="90" r="4" filter="url(#glow)"/>
+    
+    <!-- 输出层 -->
+    <circle cx="75" cy="40" r="3" filter="url(#glow)"/>
+    <circle cx="75" cy="60" r="3" filter="url(#glow)"/>
+    <circle cx="75" cy="80" r="3" filter="url(#glow)"/>
+  </g>
+  
+  <!-- AI神经网络连接线 -->
+  <g id="aiConnections" stroke="url(#aiGradient)" stroke-width="1" opacity="0.6">
+    <!-- 输入层到隐藏层 -->
+    <line x1="28" y1="35" x2="42" y2="30"/>
+    <line x1="28" y1="35" x2="42" y2="50"/>
+    <line x1="28" y1="50" x2="42" y2="30"/>
+    <line x1="28" y1="50" x2="42" y2="50"/>
+    <line x1="28" y1="50" x2="42" y2="70"/>
+    <line x1="28" y1="65" x2="42" y2="50"/>
+    <line x1="28" y1="65" x2="42" y2="70"/>
+    <line x1="28" y1="80" x2="42" y2="70"/>
+    <line x1="28" y1="80" x2="42" y2="90"/>
+    
+    <!-- 隐藏层到输出层 -->
+    <line x1="48" y1="30" x2="72" y2="40"/>
+    <line x1="48" y1="50" x2="72" y2="40"/>
+    <line x1="48" y1="50" x2="72" y2="60"/>
+    <line x1="48" y1="70" x2="72" y2="60"/>
+    <line x1="48" y1="70" x2="72" y2="80"/>
+    <line x1="48" y1="90" x2="72" y2="80"/>
+  </g>
+  
+  <!-- 量化K线图表 -->
+  <g id="quantChart" stroke="white" stroke-width="2" fill="none" opacity="0.9">
+    <!-- K线柱状图 -->
+    <rect x="82" y="25" width="3" height="15" fill="url(#dataGradient)"/>
+    <rect x="87" y="30" width="3" height="20" fill="url(#dataGradient)"/>
+    <rect x="92" y="20" width="3" height="25" fill="url(#dataGradient)"/>
+    <rect x="97" y="35" width="3" height="10" fill="url(#dataGradient)"/>
+    
+    <!-- 趋势线 -->
+    <path d="M 82 40 Q 90 25 97 35" stroke="white" stroke-width="2" fill="none" opacity="0.8"/>
+  </g>
+  
+  <!-- 数据流动效果 -->
+  <g id="dataFlow" opacity="0.7">
+    <!-- 数据点 -->
+    <circle cx="35" cy="25" r="1.5" fill="#22D3EE">
+      <animate attributeName="opacity" values="0.3;1;0.3" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="55" cy="35" r="1.5" fill="#22D3EE">
+      <animate attributeName="opacity" values="0.3;1;0.3" dur="2s" begin="0.5s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="85" cy="45" r="1.5" fill="#22D3EE">
+      <animate attributeName="opacity" values="0.3;1;0.3" dur="2s" begin="1s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  
+  <!-- 抽象AI标识 -->
+  <g id="abstractAI" transform="translate(60, 60)">
+    <!-- 抽象的A形状 - 三角形变形 -->
+    <path d="M -12 8 L -8 -8 L -4 -8 L 0 8 L -4 8 L -6 2 L -10 2 Z" fill="white" opacity="0.95">
+      <animate attributeName="opacity" values="0.8;1;0.8" dur="3s" repeatCount="indefinite"/>
+    </path>
+    
+    <!-- 抽象的I形状 - 不规则几何体 -->
+    <g transform="translate(8, 0)">
+      <!-- 主体 -->
+      <path d="M -2 -8 L 2 -8 L 3 -6 L 3 6 L 2 8 L -2 8 L -3 6 L -3 -6 Z" fill="white" opacity="0.95">
+        <animate attributeName="opacity" values="0.8;1;0.8" dur="3s" begin="0.5s" repeatCount="indefinite"/>
+      </path>
+      <!-- 装饰点 -->
+      <circle cx="0" cy="-4" r="1" fill="url(#aiGradient)" opacity="0.8"/>
+      <circle cx="0" cy="0" r="1" fill="url(#aiGradient)" opacity="0.8"/>
+      <circle cx="0" cy="4" r="1" fill="url(#aiGradient)" opacity="0.8"/>
+    </g>
+    
+    <!-- 连接线条 -->
+    <path d="M -6 0 L 6 0" stroke="url(#aiGradient)" stroke-width="1" opacity="0.6">
+      <animate attributeName="stroke-width" values="1;2;1" dur="2s" repeatCount="indefinite"/>
+    </path>
+    
+    <!-- 量化符号 */
+    <g transform="translate(0, 18)">
+      <text x="0" y="0" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" fill="white" opacity="0.7">QuantAI Pro</text>
+    </g>
+  </g>
+  
+  <!-- 外围装饰圆环 -->
+  <circle cx="60" cy="60" r="50" fill="none" stroke="white" stroke-width="1" opacity="0.3" stroke-dasharray="5,5">
+    <animateTransform attributeName="transform" type="rotate" values="0 60 60;360 60 60" dur="20s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- 内部装饰圆环 -->
+  <circle cx="60" cy="60" r="45" fill="none" stroke="url(#aiGradient)" stroke-width="0.5" opacity="0.5" stroke-dasharray="3,3">
+    <animateTransform attributeName="transform" type="rotate" values="360 60 60;0 60 60" dur="15s" repeatCount="indefinite"/>
+  </circle>
+</svg> 

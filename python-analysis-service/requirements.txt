@@ -1,0 +1,22 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.9.0
+httpx==0.25.0
+requests==2.31.0
+pandas==2.2.3
+numpy==2.2.0
+scikit-learn>=1.4.0
+sentence-transformers==2.2.2
+jieba==0.42.1
+dashscope==1.20.0
+python-dotenv==1.0.0
+aiofiles==23.2.0
+gensim==4.3.2
+zhon==1.1.5
+
+# 数据库相关
+sqlalchemy==2.0.23
+pymysql==1.1.0
+
+# 缓存相关
+redis==5.0.1

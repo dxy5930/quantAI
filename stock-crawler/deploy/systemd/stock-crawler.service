@@ -1,0 +1,31 @@
+[Unit]
+Description=Stock Data Crawler Daily Sync Service
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=stockcrawler
+Group=stockcrawler
+WorkingDirectory=/opt/stock-crawler
+Environment=PATH=/opt/stock-crawler/venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/stock-crawler/venv/bin/python daily_sync.py --mode schedule
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=stock-crawler
+
+# 资源限制
+MemoryMax=2G
+CPUQuota=50%
+
+# 安全设置
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/stock-crawler/logs
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
