@@ -357,7 +357,7 @@ export class HomeService {
         }),
       ]);
 
-      // 计算平均收益率
+      // 计算平均收益率 - 直接从totalReturn列获取
       const avgReturnResult = await this.backtestHistoryRepository
         .createQueryBuilder("backtest")
         .select("AVG(backtest.totalReturn)", "avgReturn")

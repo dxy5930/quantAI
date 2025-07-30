@@ -36,4 +36,5 @@ export { ErrorMessage, SimpleError, NetworkError } from './ErrorMessage';
 export { ResponsiveContainer, ResponsiveGrid } from './ResponsiveContainer';
 export { LazyImage, ProgressiveImage } from './LazyImage';
 export { PageHeader, SimplePageHeader } from './PageHeader'; 
-export { default as AIAnalysisLoader } from './AIAnalysisLoader'; 
+export { default as AIAnalysisLoader } from './AIAnalysisLoader';
+export { default as StickyNote } from './StickyNote';

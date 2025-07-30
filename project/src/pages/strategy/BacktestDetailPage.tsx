@@ -97,7 +97,7 @@ const BacktestDetailPage: React.FC = observer(() => {
     strategy.setIsBacktesting(true);
     try {
       const symbols = config.symbols?.map((pos) => pos.symbol) || [];
-      const apiResult = await backtestService.runBacktest({
+      const apiResult:any = await backtestService.runBacktest({
         strategy_id: config.strategyId,
         start_date: config.startDate,
         end_date: config.endDate,
@@ -114,11 +114,11 @@ const BacktestDetailPage: React.FC = observer(() => {
         winRate: apiResult.performance.win_rate,
         totalTrades: apiResult.trades.length,
         backtestType: config.backtestType,
-        equity: apiResult.equity_curve.map((point) => ({
+        equity: apiResult.equity_curve.map((point: { date: any; value: any; }) => ({
           date: point.date,
           value: point.value,
         })),
-        trades: apiResult.trades.map((trade) => ({
+        trades: apiResult.trades.map((trade: { timestamp: any; side: any; price: any; quantity: any; pnl: any; }) => ({
           date: trade.timestamp,
           type: trade.side,
           price: trade.price,

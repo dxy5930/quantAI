@@ -12,6 +12,7 @@ import { stockSelectionApi } from './stockSelectionApi';
 import { aiWorkflowApi } from './aiWorkflowApi';
 import { homeApi } from './homeApi';
 import { nodeConfigApi } from './nodeConfigApi';
+import { stickyNoteApi } from './stickyNoteApi';
 
 // 导出所有类型
 export * from './types';
@@ -20,6 +21,7 @@ export * from './userApi';
 export * from './strategyDetailApi';
 export * from './aiWorkflowApi';
 export * from './nodeConfigApi';
+export * from './stickyNoteApi';
 
 // 导出各个API模块
 export { authApi } from './authApi';
@@ -35,6 +37,7 @@ export { stockSelectionApi } from './stockSelectionApi';
 export { aiWorkflowApi } from './aiWorkflowApi';
 export { homeApi } from './homeApi';
 export { nodeConfigApi } from './nodeConfigApi';
+export { stickyNoteApi } from './stickyNoteApi';
 
 // 统一导出所有API
 export const api = {
@@ -50,6 +53,7 @@ export const api = {
   aiWorkflow: aiWorkflowApi,
   home: homeApi,
   nodeConfig: nodeConfigApi,
+  stickyNote: stickyNoteApi,
 };
 
 // 默认导出

@@ -13,13 +13,16 @@ import {
   Menu,
   X,
   Bot,
+  StickyNote as StickyNoteIcon,
 } from "lucide-react";
 import { ROUTES } from "../../constants/routes";
 import { useUserStore, useAppStore } from "../../hooks/useStore";
+import { useStickyNote } from "../../hooks/useStickyNote";
 import { NotificationModal } from "../common/NotificationModal";
 import { ThemeToggle } from "../common/ThemeToggle";
 import { Logo } from "../common/Logo";
 import { Badge } from "../common/Badge";
+import StickyNote from "../common/StickyNote";
 
 export const Header: React.FC = observer(() => {
   const location = useLocation();
@@ -30,6 +33,33 @@ export const Header: React.FC = observer(() => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
+
+  // 笔记功能
+  const {
+    isOpen: isNoteOpen,
+    content: noteContent,
+    position: notePosition,
+    size: noteSize,
+    color: noteColor,
+    title: noteTitle,
+    isMinimized: isNoteMinimized,
+    zIndex: noteZIndex,
+    toggleNote,
+    closeNote,
+    updateContent: updateNoteContent,
+    updatePosition: updateNotePosition,
+    updateSize: updateNoteSize,
+    toggleMinimize: toggleNoteMinimize,
+    bringToFront: bringNoteToFront,
+    saveToDatabase: saveNoteToDatabase,
+  } = useStickyNote({
+    id: 'global-sticky-note',
+    initialContent: '<p>欢迎使用便利贴功能！</p><p>你可以在这里记录任何想法和笔记。</p>',
+    initialPosition: { x: typeof window !== 'undefined' ? window.innerWidth - 450 : 100, y: 80 },
+    initialSize: { width: 400, height: 300 },
+    initialColor: 'yellow',
+    initialTitle: '我的便利贴'
+  });
 
   const navItems = [
     { path: "/", label: "首页", icon: Home },
@@ -125,6 +155,19 @@ export const Header: React.FC = observer(() => {
           <div className="flex items-center space-x-4">
             {/* 主题切换按钮 */}
             <ThemeToggle />
+
+            {/* 笔记按钮 - 只有登录用户才能看到 */}
+            {userStore.isLoggedIn && (
+              <button
+                onClick={toggleNote}
+                className={`text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 ${
+                  isNoteOpen ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400' : ''
+                }`}
+                title="便利贴"
+              >
+                <StickyNoteIcon className="w-5 h-5" />
+              </button>
+            )}
 
             {/* 通知按钮 */}
             <button
@@ -299,6 +342,28 @@ export const Header: React.FC = observer(() => {
         isOpen={showNotificationModal}
         onClose={() => setShowNotificationModal(false)}
       />
+
+      {/* 全局便利贴 - 只有登录用户才能看到 */}
+      {userStore.isLoggedIn && (
+        <StickyNote
+          id="global-sticky-note"
+          isOpen={isNoteOpen}
+          onClose={closeNote}
+          title={noteTitle}
+          content={noteContent}
+          onContentChange={updateNoteContent}
+          position={notePosition}
+          onPositionChange={updateNotePosition}
+          size={noteSize}
+          onSizeChange={updateNoteSize}
+          color={noteColor}
+          isMinimized={isNoteMinimized}
+          onToggleMinimize={toggleNoteMinimize}
+          zIndex={noteZIndex}
+          onBringToFront={bringNoteToFront}
+          onSave={saveNoteToDatabase}
+        />
+      )}
     </header>
   );
 });

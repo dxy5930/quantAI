@@ -14,4 +14,5 @@ export { useAsyncAction } from './useAsyncAction';
 export { useMetaData } from './useMetaData';
 export { useStockSearch } from './useStockSearch';
 export { useSearchFilter } from './useSearchFilter';
-export { useShare } from './useShare'; 
+export { useShare } from './useShare';
+export { useStickyNote } from './useStickyNote'; 
