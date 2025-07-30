@@ -41,14 +41,14 @@ export class EnvironmentService {
       app: {
         port: parseInt(process.env.PORT || '3001', 10),
         env,
-        name: process.env.APP_NAME || 'ChaoGu Quant Platform',
+        name: process.env.APP_NAME || 'strat chain',
       },
       database: {
         host: process.env.DB_HOST || 'localhost',
         port: parseInt(process.env.DB_PORT || '3306', 10),
         username: process.env.DB_USER || 'root',
         password: process.env.DB_PASS || '',
-        database: process.env.DB_NAME || 'quant_ai_pro',
+        database: process.env.DB_NAME || 'strat_chain',
       },
       jwt: {
         secret: process.env.JWT_SECRET || 'default-secret-change-in-production',
@@ -81,9 +81,9 @@ export class EnvironmentService {
     // 根据环境自动推断
     switch (env) {
       case 'production':
-        return process.env.FRONTEND_URL_PROD || 'https://your-production-domain.com';
+        return process.env.FRONTEND_URL_PROD || 'https://inhandle.com';
       case 'staging':
-        return process.env.FRONTEND_URL_STAGING || 'https://staging.your-domain.com';
+        return process.env.FRONTEND_URL_STAGING || 'https://test.inhandle.com';
       case 'test':
         return process.env.FRONTEND_URL_TEST || 'http://localhost:3000';
       default:
@@ -104,13 +104,13 @@ export class EnvironmentService {
     switch (env) {
       case 'production':
         return [
-          'https://your-production-domain.com',
-          'https://www.your-production-domain.com'
+          'https://inhandle.com',
+          'https://inhandle.com'
         ];
       case 'staging':
         return [
-          'https://staging.your-domain.com',
-          'https://test.your-domain.com'
+          'https://test.inhandle.com',
+          'https://test.inhandle.com'
         ];
       default:
         return [

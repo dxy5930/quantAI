@@ -236,10 +236,10 @@ const AIWorkflowPage: React.FC = observer(() => {
               <WorkflowIcon className="w-8 h-8 text-blue-600" />
               <div>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                  AI 工作流画布
+                  FindValue AI 工作流
                 </h1>
                 <p className="text-gray-600 dark:text-gray-400">
-                  拖拽式可视化工作流编辑器，构建你的投资分析流程
+                  拖拽式可视化工作流编辑器，发现你的投资优势和超额收益
                 </p>
               </div>
             </div>
@@ -315,7 +315,7 @@ const AIWorkflowPage: React.FC = observer(() => {
             <Bot className="w-5 h-5 text-blue-600 mt-0.5" />
             <div>
               <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-1">
-                如何使用 AI 工作流画布
+                如何使用 FindValue AI 工作流
               </h4>
               <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
                 <li>• 从左侧节点库拖拽节点到画布中</li>
