@@ -1,6 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Maximize2, Minimize2, Palette, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, Link2 } from 'lucide-react';
-import { getColorOptions, getStickyNoteClasses, StickyNoteColor } from '../../utils/stickyNoteColors';
+import React, { useState, useEffect, useRef } from "react";
+import {
+  X,
+  Maximize2,
+  Minimize2,
+  Palette,
+  Bold,
+  Italic,
+  Underline,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Link2,
+} from "lucide-react";
+import {
+  getColorOptions,
+  getStickyNoteClasses,
+  StickyNoteColor,
+} from "../../utils/stickyNoteColors";
 
 interface StickyNoteModalProps {
   isOpen: boolean;
@@ -16,7 +32,7 @@ interface StickyNoteModalProps {
     content: string;
     color: "yellow" | "pink" | "blue" | "green" | "orange";
   };
-  mode: 'create' | 'edit';
+  mode: "create" | "edit";
 }
 
 const StickyNoteModal: React.FC<StickyNoteModalProps> = ({
@@ -25,11 +41,13 @@ const StickyNoteModal: React.FC<StickyNoteModalProps> = ({
   onSave,
   onDelete,
   initialData,
-  mode
+  mode,
 }) => {
-  const [title, setTitle] = useState(initialData?.title || '新建便利贴');
-  const [content, setContent] = useState(initialData?.content || '');
-  const [color, setColor] = useState<"yellow" | "pink" | "blue" | "green" | "orange">(initialData?.color || 'yellow');
+  const [title, setTitle] = useState(initialData?.title || "新建便利贴");
+  const [content, setContent] = useState(initialData?.content || "");
+  const [color, setColor] = useState<
+    "yellow" | "pink" | "blue" | "green" | "orange"
+  >(initialData?.color || "yellow");
   const [isMinimized, setIsMinimized] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -39,28 +57,30 @@ const StickyNoteModal: React.FC<StickyNoteModalProps> = ({
       setContent(initialData.content);
       setColor(initialData.color);
     } else {
-      setTitle('新建便利贴');
-      setContent('<p>欢迎使用便利贴功能！</p><p>你可以在这里记录任何想法和笔记。</p>');
-      setColor('yellow');
+      setTitle("新建便利贴");
+      setContent(
+        "<p>欢迎使用便利贴功能！</p><p>你可以在这里记录任何想法和笔记。</p>"
+      );
+      setColor("yellow");
     }
   }, [initialData, isOpen]);
 
   const handleSave = () => {
     if (!title.trim()) {
-      alert('请输入便利贴标题');
+      alert("请输入便利贴标题");
       return;
     }
-    
+
     onSave({
       title: title.trim(),
       content: contentRef.current?.innerHTML || content,
-      color
+      color,
     });
     onClose();
   };
 
   const handleDelete = () => {
-    if (confirm('确定要删除这个便利贴吗？')) {
+    if (confirm("确定要删除这个便利贴吗？")) {
       onDelete?.();
       onClose();
     }
@@ -77,30 +97,40 @@ const StickyNoteModal: React.FC<StickyNoteModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div 
-        className={`w-full max-w-2xl mx-4 bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden transition-all ${
-          isMinimized ? 'h-16' : 'h-auto max-h-[90vh]'
+      <div
+        className={`w-full max-w-2xl mx-4 bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden  ${
+          isMinimized ? "h-16" : "h-auto max-h-[90vh]"
         }`}
       >
         {/* 标题栏 */}
-        <div className={`px-4 py-3 border-b border-gray-200 dark:border-gray-600 flex items-center justify-between ${getStickyNoteClasses(color).bg}`}>
+        <div
+          className={`px-4 py-3 border-b border-gray-200 dark:border-gray-600 flex items-center justify-between ${
+            getStickyNoteClasses(color).bg
+          }`}
+        >
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className={`flex-1 bg-transparent ${getStickyNoteClasses(color).text} font-medium text-lg border-none outline-none placeholder-gray-500 dark:placeholder-gray-400`}
+            className={`flex-1 bg-transparent ${
+              getStickyNoteClasses(color).text
+            } font-medium text-lg border-none outline-none placeholder-gray-500 dark:placeholder-gray-400`}
             placeholder="便利贴标题..."
           />
-          
+
           <div className="flex items-center space-x-2 ml-4">
             <button
               onClick={() => setIsMinimized(!isMinimized)}
               className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-white hover:bg-opacity-50 dark:hover:bg-gray-700 dark:hover:bg-opacity-50 rounded"
-              title={isMinimized ? '展开' : '最小化'}
+              title={isMinimized ? "展开" : "最小化"}
             >
-              {isMinimized ? <Maximize2 className="w-4 h-4" /> : <Minimize2 className="w-4 h-4" />}
+              {isMinimized ? (
+                <Maximize2 className="w-4 h-4" />
+              ) : (
+                <Minimize2 className="w-4 h-4" />
+              )}
             </button>
-            
+
             <button
               onClick={onClose}
               className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-white hover:bg-opacity-50 dark:hover:bg-gray-700 dark:hover:bg-opacity-50 rounded"
@@ -117,7 +147,9 @@ const StickyNoteModal: React.FC<StickyNoteModalProps> = ({
             {/* 颜色选择工具栏 */}
             <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-300">便利贴颜色：</span>
+                <span className="text-sm text-gray-600 dark:text-gray-300">
+                  便利贴颜色：
+                </span>
                 <div className="flex items-center space-x-2">
                   <Palette className="w-4 h-4 text-gray-600 dark:text-gray-300" />
                   <div className="flex space-x-1">
@@ -125,8 +157,12 @@ const StickyNoteModal: React.FC<StickyNoteModalProps> = ({
                       <button
                         key={option.value}
                         onClick={() => setColor(option.value)}
-                        className={`w-6 h-6 rounded-full border-2 ${option.bg} ${option.border} ${
-                          color === option.value ? 'ring-2 ring-gray-400 dark:ring-gray-500' : ''
+                        className={`w-6 h-6 rounded-full border-2 ${
+                          option.bg
+                        } ${option.border} ${
+                          color === option.value
+                            ? "ring-2 ring-gray-400 dark:ring-gray-500"
+                            : ""
                         }`}
                         title={option.label}
                       />
@@ -140,21 +176,21 @@ const StickyNoteModal: React.FC<StickyNoteModalProps> = ({
             <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => formatText('bold')}
+                  onClick={() => formatText("bold")}
                   className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
                   title="加粗"
                 >
                   <Bold className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => formatText('italic')}
+                  onClick={() => formatText("italic")}
                   className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
                   title="斜体"
                 >
                   <Italic className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => formatText('underline')}
+                  onClick={() => formatText("underline")}
                   className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
                   title="下划线"
                 >
@@ -162,21 +198,21 @@ const StickyNoteModal: React.FC<StickyNoteModalProps> = ({
                 </button>
                 <div className="w-px h-4 bg-gray-300 dark:bg-gray-600" />
                 <button
-                  onClick={() => formatText('justifyLeft')}
+                  onClick={() => formatText("justifyLeft")}
                   className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
                   title="左对齐"
                 >
                   <AlignLeft className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => formatText('justifyCenter')}
+                  onClick={() => formatText("justifyCenter")}
                   className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
                   title="居中对齐"
                 >
                   <AlignCenter className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => formatText('justifyRight')}
+                  onClick={() => formatText("justifyRight")}
                   className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
                   title="右对齐"
                 >
@@ -185,8 +221,8 @@ const StickyNoteModal: React.FC<StickyNoteModalProps> = ({
                 <div className="w-px h-4 bg-gray-300 dark:bg-gray-600" />
                 <button
                   onClick={() => {
-                    const url = prompt('请输入链接地址:');
-                    if (url) formatText('createLink', url);
+                    const url = prompt("请输入链接地址:");
+                    if (url) formatText("createLink", url);
                   }}
                   className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
                   title="插入链接"
@@ -204,13 +240,13 @@ const StickyNoteModal: React.FC<StickyNoteModalProps> = ({
                 className="w-full h-full min-h-[200px] outline-none text-gray-900 dark:text-gray-100"
                 dangerouslySetInnerHTML={{ __html: content }}
                 onInput={(e) => setContent(e.currentTarget.innerHTML)}
-                style={{ wordWrap: 'break-word' }}
+                style={{ wordWrap: "break-word" }}
               />
             </div>
 
             {/* 按钮区域 */}
             <div className="flex justify-end space-x-3 p-4 border-t border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">
-              {mode === 'edit' && onDelete && (
+              {mode === "edit" && onDelete && (
                 <button
                   onClick={handleDelete}
                   className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
@@ -238,4 +274,4 @@ const StickyNoteModal: React.FC<StickyNoteModalProps> = ({
   );
 };
 
-export default StickyNoteModal; 
+export default StickyNoteModal;

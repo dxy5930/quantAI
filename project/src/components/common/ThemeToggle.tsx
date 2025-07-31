@@ -17,12 +17,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
     <button
       onClick={toggleTheme}
       className={`
-        relative inline-flex items-center justify-center p-2 rounded-lg
-        transition-all duration-300 ease-in-out
-        bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700
-        text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100
-        border border-gray-300 dark:border-gray-600
-        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+        text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800
         ${className}
       `}
       title={isDark ? '切换到浅色模式' : '切换到深色模式'}

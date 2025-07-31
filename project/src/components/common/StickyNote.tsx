@@ -307,7 +307,7 @@ const StickyNote: React.FC<StickyNoteProps> = ({
   return (
     <div
       ref={noteRef}
-      className={`fixed bg-white dark:bg-gray-800 rounded-lg shadow-xl border-2 ${colorClasses.border} overflow-hidden transition-all select-none ${
+      className={`fixed bg-white dark:bg-gray-800 rounded-lg shadow-xl border-2 ${colorClasses.border} overflow-hidden  select-none ${
         isDragging ? 'cursor-move' : ''
       }`}
       style={{
