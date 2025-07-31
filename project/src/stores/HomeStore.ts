@@ -89,20 +89,22 @@ export class HomeStore {
       
       // 验证并安全地处理返回的数据
       if (response.success && response.data && typeof response.data === 'object') {
-        // 确保数据是一个普通对象，不是错误对象或其他类型
+        const rawData = response.data as any;
+        
+        // 后端已经统一了字段格式，直接使用
         const safeData = observable.object({
-          symbol: response.data.symbol || symbol,
-          name: response.data.name || `股票${symbol}`,
-          analysis: formatAnalysisText(response.data.analysis, 5000),
-          rating: response.data.rating || 'C',
-          technicalScore: response.data.technical_score || 0,
-          fundamentalScore: response.data.fundamental_score || 0,
-          recommendation: response.data.recommendation || 'hold',
-          targetPrice: response.data.targetPrice || undefined,
-          riskLevel: response.data.riskLevel || 'medium',
-          keyPoints: Array.isArray(response.data.keyPoints) ? response.data.keyPoints : [],
-          warnings: Array.isArray(response.data.warnings) ? response.data.warnings : [],
-          generatedAt: response.data.generatedAt || new Date().toISOString(),
+          symbol: rawData.symbol || symbol,
+          name: rawData.name || `股票${symbol}`,
+          analysis: formatAnalysisText(rawData.analysis, 5000),
+          rating: rawData.rating || 'C',
+          technical_score: rawData.technical_score || 0,
+          fundamental_score: rawData.fundamental_score || 0,
+          recommendation: rawData.recommendation || 'hold',
+          target_price: rawData.target_price || undefined,
+          risk_level: rawData.risk_level || 'medium',
+          key_points: Array.isArray(rawData.key_points) ? rawData.key_points : [],
+          warnings: Array.isArray(rawData.warnings) ? rawData.warnings : [],
+          generatedAt: rawData.generatedAt || new Date().toISOString(),
         } as AIStockAnalysis);
         
         runInAction(() => {

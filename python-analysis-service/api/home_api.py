@@ -183,20 +183,11 @@ async def analyze_stock(request: StockAnalyzeRequest):
         # 使用通义千问进行AI分析
         analysis_result = qwen_analyzer.analyze_stock_for_homepage(symbol)
         
-        # 返回完整的分析结果，格式化为后端期望的结构
+        # 返回完整的分析结果，直接使用英文字段名
         return {
             "success": True,
             "data": {
-                "name": analysis_result.get('名称', f'股票{symbol}'),
-                "analysis": analysis_result.get('分析', 'AI分析暂时不可用'),
-                "rating": analysis_result.get('评级', 'B'),
-                "technical_score": analysis_result.get('技术面评分', 60),
-                "fundamental_score": analysis_result.get('基本面评分', 60),
-                "recommendation": analysis_result.get('投资建议', 'hold'),
-                "target_price": analysis_result.get('目标价格'),
-                "risk_level": analysis_result.get('风险等级', 'medium'),
-                "key_points": analysis_result.get('关键要点', []),
-                "warnings": analysis_result.get('风险提示', [])
+                "analysis": analysis_result
             },
             "message": "股票分析成功",
             "timestamp": datetime.now().isoformat()

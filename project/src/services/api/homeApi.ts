@@ -23,18 +23,16 @@ export interface AIMarketAnalysis {
 }
 
 export interface AIStockAnalysis {
-  technical_score: number;
-  fundamental_score: number;
   symbol: string; // 股票代码
   name: string; // 股票名称
   analysis: string; // AI分析结果
   rating: 'A+' | 'A' | 'B+' | 'B' | 'C+' | 'C' | 'D'; // 评级
-  technicalScore: number; // 技术面评分 0-100
-  fundamentalScore: number; // 基本面评分 0-100
+  technical_score: number; // 技术面评分 0-100
+  fundamental_score: number; // 基本面评分 0-100
   recommendation: 'strong_buy' | 'buy' | 'hold' | 'sell' | 'strong_sell'; // 推荐操作
-  targetPrice?: number; // 目标价格
-  riskLevel: 'low' | 'medium' | 'high'; // 风险等级
-  keyPoints: string[]; // 关键要点
+  target_price?: number; // 目标价格
+  risk_level: 'low' | 'medium' | 'high'; // 风险等级
+  key_points: string[]; // 关键要点
   warnings: string[]; // 风险提示
   generatedAt: string; // 生成时间
 }

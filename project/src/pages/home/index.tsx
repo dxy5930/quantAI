@@ -276,7 +276,7 @@ const HomePage: React.FC = observer(() => {
                         技术面评分
                       </span>
                       <span className="text-lg font-semibold text-blue-600 dark:text-blue-400">
-                        {home.stockAnalysis.technicalScore}/100
+                        {home.stockAnalysis.technical_score}/100
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -285,7 +285,7 @@ const HomePage: React.FC = observer(() => {
                         style={{
                           width: `${Math.min(
                             100,
-                            Math.max(0, home.stockAnalysis.technicalScore)
+                            Math.max(0, home.stockAnalysis.technical_score)
                           )}%`,
                         }}
                       ></div>
@@ -298,7 +298,7 @@ const HomePage: React.FC = observer(() => {
                         基本面评分
                       </span>
                       <span className="text-lg font-semibold text-green-600 dark:text-green-400">
-                        {home.stockAnalysis.fundamentalScore}/100
+                        {home.stockAnalysis.fundamental_score}/100
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -307,7 +307,7 @@ const HomePage: React.FC = observer(() => {
                         style={{
                           width: `${Math.min(
                             100,
-                            Math.max(0, home.stockAnalysis.fundamentalScore)
+                            Math.max(0, home.stockAnalysis.fundamental_score)
                           )}%`,
                         }}
                       ></div>
@@ -342,22 +342,22 @@ const HomePage: React.FC = observer(() => {
                       <p
                         className={`font-medium ${
                           RISK_COLOR_MAP[
-                            home.stockAnalysis.riskLevel as RiskLevelType
+                            home.stockAnalysis.risk_level as RiskLevelType
                           ] || "text-yellow-600 dark:text-yellow-400"
                         }`}
                       >
                         {RISK_TEXT_MAP[
-                          home.stockAnalysis.riskLevel as RiskLevelType
+                          home.stockAnalysis.risk_level as RiskLevelType
                         ] || "中风险"}
                       </p>
                     </div>
-                    {home.stockAnalysis.targetPrice && (
+                    {home.stockAnalysis.target_price && (
                       <div className="text-right">
                         <span className="text-sm text-gray-600 dark:text-gray-400">
                           目标价格
                         </span>
                         <p className="font-medium text-emerald-600 dark:text-emerald-400">
-                          ¥{home.stockAnalysis.targetPrice.toFixed(2)}
+                          ¥{home.stockAnalysis.target_price.toFixed(2)}
                         </p>
                       </div>
                     )}
@@ -365,8 +365,8 @@ const HomePage: React.FC = observer(() => {
                 </div>
 
                 {/* 关键要点 */}
-                {home.stockAnalysis.keyPoints &&
-                  home.stockAnalysis.keyPoints.length > 0 && (
+                {home.stockAnalysis.key_points &&
+                  home.stockAnalysis.key_points.length > 0 && (
                     <div className="bg-white dark:bg-gray-800 rounded-lg p-4">
                       <div className="flex items-center space-x-2 mb-3">
                         <Target className="h-5 w-5 text-green-500" />
@@ -375,7 +375,7 @@ const HomePage: React.FC = observer(() => {
                         </h5>
                       </div>
                       <div className="space-y-2">
-                        {home.stockAnalysis.keyPoints.map(
+                        {home.stockAnalysis.key_points.map(
                           (point: string, index: number) => (
                             <div
                               key={index}

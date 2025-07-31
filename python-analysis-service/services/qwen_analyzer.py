@@ -289,21 +289,22 @@ class QwenAnalyzer:
                 recommendation = 'hold'
             
             return {
-                '名称': stock_info['name'],
-                '分析': clean_text(analysis_text) or f"{symbol}技术面{technical_score}分，基本面{fundamental_score}分。当前{stock_info['market']}处于震荡调整期，建议关注技术面突破信号。",
-                '评级': rating,
-                '技术面评分': technical_score,
-                '基本面评分': fundamental_score,
-                '投资建议': recommendation,
-                '目标价格': None,
-                '风险等级': risk_level,
-                '关键要点': [
+                'symbol': symbol,
+                'name': stock_info['name'],
+                'analysis': clean_text(analysis_text) or f"{symbol}技术面{technical_score}分，基本面{fundamental_score}分。当前{stock_info['market']}处于震荡调整期，建议关注技术面突破信号。",
+                'rating': rating,
+                'technical_score': technical_score,
+                'fundamental_score': fundamental_score,
+                'recommendation': recommendation,
+                'target_price': None,
+                'risk_level': risk_level,
+                'key_points': [
                     f"技术面{technical_score}分",
                     f"基本面{fundamental_score}分", 
                     f"评级{rating}",
                     "基于AI深度分析"
                 ],
-                '风险提示': [
+                'warnings': [
                     "注意大盘系统性风险",
                     "建议分批建仓控制仓位",
                     "密切关注政策变化"
@@ -320,21 +321,22 @@ class QwenAnalyzer:
         fundamental_score = random.randint(50, 70)
         
         return {
-            '名称': f'股票{symbol}',
-            '分析': f"{symbol}当前处于震荡调整格局，技术面评分{technical_score}分，基本面评分{fundamental_score}分。从技术指标来看，该股走势相对平稳，但缺乏明确的方向性突破信号。基本面方面，公司业绩表现中等，行业地位有待观察。综合考虑当前市场环境和个股特点，建议投资者保持观望态度，等待更加明确的买入或卖出信号出现。建议关注成交量变化和关键技术位突破情况，同时留意相关政策和行业动态对股价的影响。",
-            '评级': 'C+',
-            '技术面评分': technical_score,
-            '基本面评分': fundamental_score,
-            '投资建议': 'hold',
-            '目标价格': None,
-            '风险等级': 'medium',
-            '关键要点': [
+            'symbol': symbol,
+            'name': f'股票{symbol}',
+            'analysis': f"{symbol}当前处于震荡调整格局，技术面评分{technical_score}分，基本面评分{fundamental_score}分。从技术指标来看，该股走势相对平稳，但缺乏明确的方向性突破信号。基本面方面，公司业绩表现中等，行业地位有待观察。综合考虑当前市场环境和个股特点，建议投资者保持观望态度，等待更加明确的买入或卖出信号出现。建议关注成交量变化和关键技术位突破情况，同时留意相关政策和行业动态对股价的影响。",
+            'rating': 'C+',
+            'technical_score': technical_score,
+            'fundamental_score': fundamental_score,
+            'recommendation': 'hold',
+            'target_price': None,
+            'risk_level': 'medium',
+            'key_points': [
                 f"技术面{technical_score}分，走势相对平稳",
                 f"基本面{fundamental_score}分，业绩表现中等",
                 "建议观望等待明确信号",
                 "关注成交量和技术位突破"
             ],
-            '风险提示': [
+            'warnings': [
                 "AI分析服务暂时不可用，请谨慎参考",
                 "注意市场系统性风险",
                 "建议分散投资降低风险"

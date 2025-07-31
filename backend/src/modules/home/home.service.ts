@@ -151,9 +151,13 @@ export class HomeService {
       if (!pythonResponse.success) {
         throw new Error(pythonResponse.message || "Python服务返回失败");
       }
+
+      // Python服务已返回英文字段名，直接使用
+      const stockAnalysis = pythonResponse.data?.analysis || {};
+
       return {
         success: true,
-        data:  pythonResponse.data?.analysis,
+        data: stockAnalysis,
         message: "股票分析成功",
         timestamp: new Date().toISOString(),
       };
