@@ -1,560 +1,435 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
-import { X, Move, Maximize2, Minimize2, Save } from "lucide-react";
-import ReactQuill from "react-quill";
-import "react-quill/dist/quill.snow.css";
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { X, Palette, Minimize2, Maximize2, Save, Check } from 'lucide-react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+import { getColorOptions, getStickyNoteClasses, StickyNoteColor } from '../../utils/stickyNoteColors';
 
 interface StickyNoteProps {
   id: string;
+  mode: "create" | "edit";
   isOpen: boolean;
   onClose: () => void;
+  onSave: (data: {
+    title: string;
+    content: string;
+    color: StickyNoteColor;
+    isMinimized: boolean;
+  }, silent?: boolean) => void;
   title: string;
   content: string;
-  onContentChange: (content: string) => void;
-  position: { x: number; y: number };
-  onPositionChange: (position: { x: number; y: number }) => void;
-  size: { width: number; height: number };
-  onSizeChange: (size: { width: number; height: number }) => void;
-  color: "yellow" | "pink" | "blue" | "green" | "orange";
+  color: StickyNoteColor;
   isMinimized: boolean;
-  onToggleMinimize: () => void;
-  zIndex: number;
-  onBringToFront: () => void;
-  onSave?: () => void;
+  noteId?: string;
 }
 
 const StickyNote: React.FC<StickyNoteProps> = ({
   id,
+  mode,
   isOpen,
   onClose,
-  title,
-  content,
-  onContentChange,
-  position,
-  onPositionChange,
-  size,
-  onSizeChange,
-  color,
-  isMinimized,
-  onToggleMinimize,
-  zIndex,
-  onBringToFront,
   onSave,
+  title: initialTitle,
+  content: initialContent,
+  color: initialColor,
+  isMinimized: initialIsMinimized,
+  noteId
 }) => {
+  const [title, setTitle] = useState(initialTitle);
+  const [content, setContent] = useState(initialContent);
+  const [color, setColor] = useState(initialColor);
+  const [isMinimized, setIsMinimized] = useState(initialIsMinimized);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
-  const [resizeDirection, setResizeDirection] = useState<string>("");
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [resizeStart, setResizeStart] = useState({
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0,
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [showSaved, setShowSaved] = useState(false);
+
+  // 防抖保存引用
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSaveDataRef = useRef<string>('');
+
+  // 固定位置和大小，不从props读取
+  const [position, setPosition] = useState(() => {
+    // 计算页面中心位置
+    const centerX = Math.max(0, (window.innerWidth - 400) / 2);
+    const centerY = Math.max(0, (window.innerHeight - 400) / 2);
+    return { x: centerX, y: centerY };
   });
+  const [size, setSize] = useState({ width: 400, height: 400 });
 
   const noteRef = useRef<HTMLDivElement>(null);
   const quillRef = useRef<ReactQuill>(null);
 
-  // 颜色主题配置
-  const colorThemes = {
-    yellow: {
-      bg: "bg-yellow-200",
-      border: "border-yellow-300",
-      shadow: "shadow-yellow-200/50",
-      header: "bg-yellow-300",
-      toolbarBg: "bg-yellow-100/50",
-    },
-    pink: {
-      bg: "bg-pink-200",
-      border: "border-pink-300",
-      shadow: "shadow-pink-200/50",
-      header: "bg-pink-300",
-      toolbarBg: "bg-pink-100/50",
-    },
-    blue: {
-      bg: "bg-blue-200",
-      border: "border-blue-300",
-      shadow: "shadow-blue-200/50",
-      header: "bg-blue-300",
-      toolbarBg: "bg-blue-100/50",
-    },
-    green: {
-      bg: "bg-green-200",
-      border: "border-green-300",
-      shadow: "shadow-green-200/50",
-      header: "bg-green-300",
-      toolbarBg: "bg-green-100/50",
-    },
-    orange: {
-      bg: "bg-orange-200",
-      border: "border-orange-300",
-      shadow: "shadow-orange-200/50",
-      header: "bg-orange-300",
-      toolbarBg: "bg-orange-100/50",
-    },
-  };
+  useEffect(() => {
+    setTitle(initialTitle);
+    setContent(initialContent);
+    // 只在初始化时设置颜色，避免覆盖用户选择
+    if (color === initialColor || !color) {
+      setColor(initialColor);
+    }
+    setIsMinimized(initialIsMinimized);
+    
+    // 每次打开便利贴时重新居中
+    const centerX = Math.max(0, (window.innerWidth - 400) / 2);
+    const centerY = Math.max(0, (window.innerHeight - 400) / 2);
+    setPosition({ x: centerX, y: centerY });
+  }, [initialTitle, initialContent, initialIsMinimized]); // 移除 initialColor 依赖
 
-  const theme = colorThemes[color];
-
-  // 处理内容变化
-  const handleContentChange = useCallback(
-    (newContent: string) => {
-      onContentChange(newContent);
-    },
-    [onContentChange]
-  );
-
-  // 图片处理函数
-  const imageHandler = useCallback(() => {
-    const input = document.createElement("input");
-    input.setAttribute("type", "file");
-    input.setAttribute("accept", "image/*");
-    input.click();
-
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const quill = quillRef.current?.getEditor();
-          if (quill) {
-            const range = quill.getSelection();
-            const index = range ? range.index : quill.getLength();
-            quill.insertEmbed(index, "image", reader.result);
-            quill.setSelection(index + 1);
-          }
-        };
-        reader.readAsDataURL(file);
+  // 清理定时器
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
       }
     };
   }, []);
 
-  // 处理粘贴图片
-  const handlePaste = useCallback((e: ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (items) {
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.type.indexOf("image") !== -1) {
-          e.preventDefault();
-          const file = item.getAsFile();
-          if (file) {
-            const reader = new FileReader();
-            reader.onload = () => {
-              const quill = quillRef.current?.getEditor();
-              if (quill) {
-                const range = quill.getSelection();
-                const index = range ? range.index : quill.getLength();
-                quill.insertEmbed(index, "image", reader.result);
-                quill.setSelection(index + 1);
-              }
-            };
-            reader.readAsDataURL(file);
-          }
-          break;
-        }
-      }
+  const colorOptions = getColorOptions();
+
+  const colorClasses = getStickyNoteClasses(color);
+
+  // 防抖保存函数
+  const debouncedSave = useCallback((silent: boolean = false) => {
+    // 清除之前的定时器
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
     }
-  }, []);
+
+    const currentData = JSON.stringify({ title, content, color, isMinimized });
+    
+    // 如果数据没有变化，不保存
+    if (currentData === lastSaveDataRef.current) {
+      return;
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      lastSaveDataRef.current = currentData;
+      onSave({
+        title,
+        content,
+        color,
+        isMinimized
+      }, silent);
+      
+      if (!silent) {
+        setShowSaved(true);
+        setTimeout(() => setShowSaved(false), 2000);
+      }
+    }, 300); // 300ms 防抖延迟
+  }, [title, content, color, isMinimized, onSave]);
+
+  const handleSave = (silent: boolean = false) => {
+    // 立即保存，不使用防抖
+    onSave({
+      title,
+      content,
+      color,
+      isMinimized
+    }, silent);
+    
+    if (!silent) {
+      setShowSaved(true);
+      setTimeout(() => setShowSaved(false), 2000);
+    }
+  };
+
+  const handleMinimize = () => {
+    const newIsMinimized = !isMinimized;
+    setIsMinimized(newIsMinimized);
+    // 自动保存最小化状态
+    setTimeout(() => {
+      onSave({
+        title,
+        content,
+        color,
+        isMinimized: newIsMinimized
+      }, true);
+    }, 100);
+  };
 
   // ReactQuill 配置
-  const modules = {
-    toolbar: {
-      container: [
-        [{ header: [1, 2, false] }],
-        ["bold", "italic", "underline", "strike"],
-        [{ list: "ordered" }, { list: "bullet" }],
-        [{ color: [] }, { background: [] }],
-        ["link", "image"],
-        ["clean"],
-      ],
-      handlers: {
-        image: imageHandler,
-      },
-    },
+  const quillModules = {
+    toolbar: [
+      [{ 'header': [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      ['link', 'image'],
+      ['clean']
+    ]
   };
 
-  const formats = [
-    "header",
-    "bold",
-    "italic",
-    "underline",
-    "strike",
-    "list",
-    "bullet",
-    "color",
-    "background",
-    "link",
-    "image",
+  const quillFormats = [
+    'header', 'bold', 'italic', 'underline', 'strike',
+    'list', 'bullet', 'link', 'image'
   ];
 
-  // 拖拽功能 - 只在表头区域可拖拽
-  const handleHeaderMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      // 检查是否点击在按钮上
-      const target = e.target as HTMLElement;
-      if (target.closest("button")) return;
+  // 拖拽功能
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.no-drag')) return;
+    
+    setIsDragging(true);
+    setDragStart({
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    });
+    e.preventDefault();
+  };
 
-      setIsDragging(true);
-      setDragStart({
-        x: e.clientX - position.x,
-        y: e.clientY - position.y,
-      });
-      onBringToFront();
-    },
-    [position, onBringToFront]
-  );
+  const handleMouseMove = (e: MouseEvent) => {
+    if (isDragging) {
+      const newPosition = {
+        x: Math.max(0, e.clientX - dragStart.x),
+        y: Math.max(0, e.clientY - dragStart.y)
+      };
+      setPosition(newPosition);
+    }
+    if (isResizing) {
+      const newSize = {
+        width: Math.max(300, resizeStart.width + (e.clientX - resizeStart.x)),
+        height: Math.max(200, resizeStart.height + (e.clientY - resizeStart.y))
+      };
+      setSize(newSize);
+    }
+  };
 
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (isDragging) {
-        const newPosition = {
-          x: e.clientX - dragStart.x,
-          y: e.clientY - dragStart.y,
-        };
-        onPositionChange(newPosition);
-      }
-      if (isResizing) {
-        let newWidth = size.width;
-        let newHeight = size.height;
-        let newX = position.x;
-        let newY = position.y;
-
-        // 根据缩放方向计算新的尺寸和位置
-        const deltaX = e.clientX - resizeStart.x;
-        const deltaY = e.clientY - resizeStart.y;
-
-        if (resizeDirection.includes("right")) {
-          newWidth = Math.max(200, resizeStart.width + deltaX);
-        }
-        if (resizeDirection.includes("left")) {
-          const newWidthCalc = Math.max(200, resizeStart.width - deltaX);
-          newWidth = newWidthCalc;
-          newX = resizeStart.x - newWidthCalc + resizeStart.width;
-        }
-        if (resizeDirection.includes("bottom")) {
-          newHeight = Math.max(150, resizeStart.height + deltaY);
-        }
-        if (resizeDirection.includes("top")) {
-          const newHeightCalc = Math.max(150, resizeStart.height - deltaY);
-          newHeight = newHeightCalc;
-          newY = resizeStart.y - newHeightCalc + resizeStart.height;
-        }
-
-        onSizeChange({ width: newWidth, height: newHeight });
-        if (newX !== position.x || newY !== position.y) {
-          onPositionChange({ x: newX, y: newY });
-        }
-      }
-    },
-    [
-      isDragging,
-      isResizing,
-      dragStart,
-      resizeStart,
-      resizeDirection,
-      size,
-      position,
-      onPositionChange,
-      onSizeChange,
-    ]
-  );
-
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = () => {
     setIsDragging(false);
     setIsResizing(false);
-  }, []);
+  };
 
-  // 缩放功能
-  const handleResizeStart = useCallback(
-    (direction: string) => (e: React.MouseEvent) => {
-      e.stopPropagation();
-      setIsResizing(true);
-      setResizeDirection(direction);
-      setResizeStart({
-        x: e.clientX,
-        y: e.clientY,
-        width: size.width,
-        height: size.height,
-      });
-      onBringToFront();
-    },
-    [size, onBringToFront]
-  );
+  // 调整大小功能
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsResizing(true);
+    setResizeStart({
+      x: e.clientX,
+      y: e.clientY,
+      width: size.width,
+      height: size.height
+    });
+  };
 
-  // 点击便利贴时置顶
-  const handleNoteClick = useCallback(() => {
-    onBringToFront();
-  }, [onBringToFront]);
-
-  // 全局鼠标事件监听
   useEffect(() => {
     if (isDragging || isResizing) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
       return () => {
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
+  }, [isDragging, isResizing, dragStart, resizeStart]);
 
-  // 防止拖拽时选中文本
   useEffect(() => {
-    if (isDragging) {
-      document.body.style.userSelect = "none";
-      return () => {
-        document.body.style.userSelect = "";
-      };
-    }
-  }, [isDragging]);
-
-  // 添加粘贴事件监听器
-  useEffect(() => {
-    let cleanup: (() => void) | undefined;
-
-    const timer = setTimeout(() => {
-      const quillContainer = quillRef.current?.getEditor().container;
-      if (quillContainer) {
-        quillContainer.addEventListener("paste", handlePaste);
-        cleanup = () => {
-          quillContainer.removeEventListener("paste", handlePaste);
-        };
+    // 添加自定义样式
+    const style = document.createElement('style');
+    style.textContent = `
+      .sticky-note-editor .ql-editor {
+        padding: 16px;
+        min-height: 200px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #1f2937;
       }
-    }, 100);
-
+      
+      .dark .sticky-note-editor .ql-editor {
+        color: #f3f4f6;
+      }
+      
+      .sticky-note-editor .ql-toolbar {
+        border-top: none;
+        border-left: none;
+        border-right: none;
+        border-bottom: 1px solid #e5e7eb;
+        padding: 8px 16px;
+        background-color: transparent;
+      }
+      
+      .dark .sticky-note-editor .ql-toolbar {
+        border-bottom-color: #4b5563;
+      }
+      
+      .dark .sticky-note-editor .ql-toolbar .ql-stroke {
+        stroke: #d1d5db;
+      }
+      
+      .dark .sticky-note-editor .ql-toolbar .ql-fill {
+        fill: #d1d5db;
+      }
+      
+      .dark .sticky-note-editor .ql-toolbar .ql-picker-label {
+        color: #d1d5db;
+      }
+      
+      .dark .sticky-note-editor .ql-toolbar button:hover .ql-stroke,
+      .dark .sticky-note-editor .ql-toolbar button.ql-active .ql-stroke {
+        stroke: #f3f4f6;
+      }
+      
+      .dark .sticky-note-editor .ql-toolbar button:hover .ql-fill,
+      .dark .sticky-note-editor .ql-toolbar button.ql-active .ql-fill {
+        fill: #f3f4f6;
+      }
+      
+      .sticky-note-editor .ql-container {
+        border: none;
+        font-family: inherit;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      
+      .sticky-note-editor .quill {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+      
+      .sticky-note-editor .ql-editor.ql-blank::before {
+        color: #9ca3af;
+        font-style: normal;
+      }
+      
+      .dark .sticky-note-editor .ql-editor.ql-blank::before {
+        color: #6b7280;
+      }
+    `;
+    
+    document.head.appendChild(style);
+    
     return () => {
-      clearTimeout(timer);
-      cleanup?.();
+      document.head.removeChild(style);
     };
-  }, [handlePaste]);
+  }, []);
 
   if (!isOpen) return null;
 
   return (
     <div
       ref={noteRef}
-      onTouchStart={stop}
-      className={`fixed ${theme.bg} ${theme.border} border-2 rounded-lg shadow-2xl ${theme.shadow}  `}
+      className={`fixed bg-white dark:bg-gray-800 rounded-lg shadow-xl border-2 ${colorClasses.border} overflow-hidden transition-all select-none ${
+        isDragging ? 'cursor-move' : ''
+      }`}
       style={{
         left: position.x,
         top: position.y,
         width: size.width,
-        height: isMinimized ? "auto" : size.height,
-        zIndex: zIndex,
+        height: isMinimized ? 'auto' : size.height,
+        zIndex: 9999,
+        minWidth: '300px',
+        minHeight: isMinimized ? 'auto' : '200px'
       }}
-      onClick={handleNoteClick}
     >
-      {/* 便利贴头部 */}
+      {/* 标题栏 */}
       <div
-        className={`${theme.header} px-3 py-2 rounded-t-lg border-b ${theme.border} flex items-center justify-between cursor-grab active:cursor-grabbing select-none`}
-        onMouseDown={handleHeaderMouseDown}
+        className={`px-4 py-3 ${colorClasses.bg} border-b border-gray-200 dark:border-gray-600 flex items-center justify-between cursor-move`}
+        onMouseDown={handleMouseDown}
       >
-        <div className="flex items-center gap-2">
-          <Move size={14} className="text-gray-600" />
-          <span className="text-sm font-medium text-gray-700 select-none">
-            {title}
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onBlur={() => debouncedSave(true)}
+          className={`flex-1 bg-transparent ${colorClasses.text} font-medium text-lg border-none outline-none placeholder-gray-500 dark:placeholder-gray-400 no-drag`}
+          placeholder="便利贴标题..."
+        />
+        
+        <div className="flex items-center space-x-2 ml-4 no-drag">
+          {/* 保存状态显示 */}
+          {showSaved && (
+            <div className="flex items-center space-x-1 shrink-0 text-green-600 dark:text-green-400 text-sm">
+              <Check className="w-4 h-4" />
+              <span>已保存</span>
+            </div>
+          )}
+          
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onSave?.();
-            }}
-            className="p-1 hover:bg-green-200 rounded transition-colors"
-            title="保存到数据库"
+            onClick={() => handleSave(false)}
+            className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-white hover:bg-opacity-50 dark:hover:bg-gray-700 dark:hover:bg-opacity-50 rounded"
+            title="保存"
           >
-            <Save size={12} />
+            <Save className="w-4 h-4" />
           </button>
+          
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleMinimize();
-            }}
-            className="p-1 hover:bg-black/10 rounded transition-colors"
-            title={isMinimized ? "展开" : "最小化"}
+            onClick={handleMinimize}
+            className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-white hover:bg-opacity-50 dark:hover:bg-gray-700 dark:hover:bg-opacity-50 rounded"
+            title={isMinimized ? '展开' : '最小化'}
           >
-            {isMinimized ? <Maximize2 size={12} /> : <Minimize2 size={12} />}
+            {isMinimized ? <Maximize2 className="w-4 h-4" /> : <Minimize2 className="w-4 h-4" />}
           </button>
+          
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            className="p-1 hover:bg-red-200 rounded transition-colors"
+            onClick={onClose}
+            className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-white hover:bg-opacity-50 dark:hover:bg-gray-700 dark:hover:bg-opacity-50 rounded"
             title="关闭"
           >
-            <X size={12} />
+            <X className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* 便利贴内容区域 */}
+      {/* 内容区域 */}
       {!isMinimized && (
-        <div className="relative flex-1 p-3">
-          {/* ReactQuill 富文本编辑器 */}
-          <div className="relative">
-            <div className="quill-container">
-              <ReactQuill
-                ref={quillRef}
-                theme="snow"
-                value={content}
-                onChange={handleContentChange}
-                modules={modules}
-                formats={formats}
-                placeholder="在这里写下你的笔记..."
-                style={{
-                  height: size.height - 120,
-                  minHeight: "150px",
-                }}
-              />
+        <div className="flex flex-col h-full">
+          {/* 颜色选择工具栏 */}
+          <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 no-drag">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600 dark:text-gray-300">便利贴颜色：</span>
+              <div className="flex items-center space-x-2">
+                <Palette className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                <div className="flex space-x-1">
+                  {colorOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        setColor(option.value);
+                        // 不立即保存，只在用户保存时才提交颜色变化
+                      }}
+                      className={`w-6 h-6 rounded-full border-2 ${option.bg} ${option.border} ${
+                        color === option.value ? 'ring-2 ring-gray-400 dark:ring-gray-500' : ''
+                      }`}
+                      title={option.label}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
+          </div>
 
-            {/* 自定义样式覆盖 */}
-            <style
-              dangerouslySetInnerHTML={{
-                __html: `
-                .quill-container .ql-toolbar {
-                  border: none !important;
-                  border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
-                  padding: 8px !important;
-                  border-radius: 4px 4px 0 0 !important;
-                  background: ${
-                    color === "yellow"
-                      ? "rgba(254, 240, 138, 0.5)"
-                      : color === "pink"
-                      ? "rgba(251, 207, 232, 0.5)"
-                      : color === "blue"
-                      ? "rgba(191, 219, 254, 0.5)"
-                      : color === "green"
-                      ? "rgba(187, 247, 208, 0.5)"
-                      : "rgba(254, 215, 170, 0.5)"
-                  } !important;
-                }
-                .quill-container .ql-toolbar .ql-formats {
-                  margin-right: 8px !important;
-                }
-                .quill-container .ql-toolbar button {
-                  width: 24px !important;
-                  height: 24px !important;
-                  padding: 2px !important;
-                  margin: 1px !important;
-                  border-radius: 3px !important;
-                }
-                .quill-container .ql-toolbar button:hover {
-                  background: rgba(0, 0, 0, 0.1) !important;
-                }
-                .quill-container .ql-toolbar button.ql-active {
-                  background: rgba(0, 0, 0, 0.15) !important;
-                }
-                .quill-container .ql-container {
-                  border: none !important;
-                  font-family: cursive, sans-serif !important;
-                  font-size: 14px !important;
-                  line-height: 1.5 !important;
-                }
-                .quill-container .ql-editor {
-                  padding: 12px !important;
-                  min-height: 100px !important;
-                  background: transparent !important;
-                  color: #374151 !important;
-                }
-                .quill-container .ql-editor.ql-blank::before {
-                  color: #9CA3AF !important;
-                  font-style: italic !important;
-                  left: 12px !important;
-                  right: 12px !important;
-                }
-                .quill-container .ql-editor p {
-                  margin-bottom: 8px !important;
-                }
-                .quill-container .ql-editor ul, 
-                .quill-container .ql-editor ol {
-                  margin-bottom: 8px !important;
-                  padding-left: 20px !important;
-                }
-                .quill-container .ql-editor h1 {
-                  font-size: 18px !important;
-                  font-weight: bold !important;
-                  margin-bottom: 8px !important;
-                }
-                .quill-container .ql-editor h2 {
-                  font-size: 16px !important;
-                  font-weight: bold !important;
-                  margin-bottom: 6px !important;
-                }
-                .quill-container .ql-editor::-webkit-scrollbar {
-                  width: 6px !important;
-                }
-                .quill-container .ql-editor::-webkit-scrollbar-track {
-                  background: rgba(0, 0, 0, 0.05) !important;
-                  border-radius: 3px !important;
-                }
-                .quill-container .ql-editor::-webkit-scrollbar-thumb {
-                  background: rgba(0, 0, 0, 0.2) !important;
-                  border-radius: 3px !important;
-                }
-                .quill-container .ql-editor::-webkit-scrollbar-thumb:hover {
-                  background: rgba(0, 0, 0, 0.3) !important;
-                }
-              `,
+          {/* ReactQuill 编辑区域 */}
+          <div className="flex-1 no-drag sticky-note-editor" style={{ minHeight: '200px' }}>
+            <ReactQuill
+              ref={quillRef}
+              value={content}
+              onChange={(value) => {
+                setContent(value);
               }}
+              onBlur={() => debouncedSave(true)}
+              modules={quillModules}
+              formats={quillFormats}
+              theme="snow"
+              style={{ 
+                height: 'calc(100% - 42px)', 
+                display: 'flex',
+                flexDirection: 'column'
+              }}
+              placeholder="在这里写下你的想法..."
             />
           </div>
         </div>
       )}
 
-      {/* 边框缩放手柄 - 避免遮挡按钮 */}
-      {/* 顶部边框 - 避开头部按钮区域 */}
-      <div
-        className="absolute top-0 left-8 right-16 h-1 cursor-n-resize opacity-0 hover:opacity-40 bg-gray-500 transition-opacity"
-        onMouseDown={handleResizeStart("top")}
-      />
-
-      {/* 底部边框 */}
-      <div
-        className="absolute bottom-0 left-2 right-2 h-1 cursor-s-resize opacity-0 hover:opacity-40 bg-gray-500 transition-opacity"
-        onMouseDown={handleResizeStart("bottom")}
-      />
-
-      {/* 左侧边框 - 避开头部区域 */}
-      <div
-        className="absolute left-0 top-8 bottom-2 w-1 cursor-w-resize opacity-0 hover:opacity-40 bg-gray-500 transition-opacity"
-        onMouseDown={handleResizeStart("left")}
-      />
-
-      {/* 右侧边框 - 避开头部区域 */}
-      <div
-        className="absolute right-0 top-8 bottom-2 w-1 cursor-e-resize opacity-0 hover:opacity-40 bg-gray-500 transition-opacity"
-        onMouseDown={handleResizeStart("right")}
-      />
-
-      {/* 角落缩放手柄 - 缩小尺寸 */}
-      {/* 左上角 - 避开头部 */}
-      <div
-        className="absolute top-8 left-0 w-4 h-4 cursor-nw-resize opacity-0 hover:opacity-50  transition-opacity"
-        onMouseDown={handleResizeStart("top-left")}
-      />
-
-      {/* 右上角 - 避开头部按钮 */}
-      <div
-        className="absolute top-8 right-0 w-4 h-4 cursor-ne-resize opacity-0 hover:opacity-50  transition-opacity"
-        onMouseDown={handleResizeStart("top-right")}
-      />
-
-      {/* 左下角 */}
-      <div
-        className="absolute bottom-0 left-0 w-4 h-4 cursor-sw-resize opacity-0 hover:opacity-50  transition-opacity"
-        onMouseDown={handleResizeStart("bottom-left")}
-      />
-
-      {/* 右下角 */}
-      <div
-        className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize opacity-0 hover:opacity-50  transition-opacity"
-        onMouseDown={handleResizeStart("bottom-right")}
-      />
+      {/* 调整大小手柄 */}
+      {!isMinimized && (
+        <div
+          className="absolute bottom-0 right-0 w-4 h-4 cursor-nw-resize bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 opacity-50 hover:opacity-100"
+          onMouseDown={handleResizeStart}
+          style={{ clipPath: 'polygon(100% 0, 0 100%, 100% 100%)' }}
+        />
+      )}
     </div>
   );
 };
 
-export default StickyNote;
+export default StickyNote; 

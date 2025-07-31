@@ -1,65 +1,53 @@
-import { IsString, IsInt, IsEnum, IsBoolean, IsOptional, Min, Max } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsBoolean, IsIn } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateStickyNoteDto {
-  @ApiProperty({ description: '便利贴唯一标识符', example: 'global-sticky-note' })
+  @ApiProperty({ description: '便利贴标题', example: '我的便利贴' })
   @IsString()
-  noteId: string;
+  title: string;
 
-  @ApiProperty({ description: '笔记标题', example: '我的便利贴', required: false })
-  @IsOptional()
+  @ApiProperty({ description: '便利贴内容（HTML格式）', example: '<p>这是便利贴内容</p>' })
   @IsString()
-  title?: string;
+  content: string;
 
-  @ApiProperty({ description: '笔记内容，支持富文本HTML格式', required: false })
+  @ApiProperty({ description: 'X坐标位置', example: 100, required: false })
   @IsOptional()
-  @IsString()
-  content?: string;
-
-  @ApiProperty({ description: '便利贴X坐标位置', example: 100, required: false })
-  @IsOptional()
-  @IsInt()
-  @Min(0)
+  @IsNumber()
   positionX?: number;
 
-  @ApiProperty({ description: '便利贴Y坐标位置', example: 100, required: false })
+  @ApiProperty({ description: 'Y坐标位置', example: 100, required: false })
   @IsOptional()
-  @IsInt()
-  @Min(0)
+  @IsNumber()
   positionY?: number;
 
-  @ApiProperty({ description: '便利贴宽度', example: 400, required: false })
+  @ApiProperty({ description: '宽度', example: 400, required: false })
   @IsOptional()
-  @IsInt()
-  @Min(200)
-  @Max(2000)
+  @IsNumber()
   width?: number;
 
-  @ApiProperty({ description: '便利贴高度', example: 300, required: false })
+  @ApiProperty({ description: '高度', example: 300, required: false })
   @IsOptional()
-  @IsInt()
-  @Min(150)
-  @Max(1500)
+  @IsNumber()
   height?: number;
 
-  @ApiProperty({ 
-    description: '便利贴颜色主题', 
-    enum: ['yellow', 'pink', 'blue', 'green', 'orange'],
-    example: 'yellow',
-    required: false
-  })
-  @IsOptional()
-  @IsEnum(['yellow', 'pink', 'blue', 'green', 'orange'])
-  color?: 'yellow' | 'pink' | 'blue' | 'green' | 'orange';
+  @ApiProperty({ description: '颜色主题', enum: ['yellow', 'pink', 'blue', 'green', 'orange'], example: 'yellow' })
+  @IsIn(['yellow', 'pink', 'blue', 'green', 'orange'])
+  color: 'yellow' | 'pink' | 'blue' | 'green' | 'orange';
 
   @ApiProperty({ description: '是否最小化', example: false, required: false })
   @IsOptional()
   @IsBoolean()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return value === 'true';
+    }
+    return Boolean(value);
+  })
   isMinimized?: boolean;
 
   @ApiProperty({ description: '层级索引', example: 1, required: false })
   @IsOptional()
-  @IsInt()
-  @Min(1)
+  @IsNumber()
   zIndex?: number;
 }

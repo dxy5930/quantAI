@@ -13,6 +13,7 @@ import { StocksModule } from "./modules/stocks/stocks.module";
 import { SystemModule } from "./modules/system/system.module";
 import { AIWorkflowModule } from "./modules/ai-workflow/ai-workflow.module";
 import { HomeModule } from "./modules/home/home.module";
+import { StickyNotesModule } from "./modules/sticky-notes/sticky-notes.module";
 import { SharedModule } from "./shared/shared.module";
 import { ApiPrefixModule } from "./shared/modules/api-prefix.module";
 import { CACHE_CONSTANTS, THROTTLE_CONSTANTS } from "./shared/constants";
@@ -85,6 +86,7 @@ import { CACHE_CONSTANTS, THROTTLE_CONSTANTS } from "./shared/constants";
     SystemModule,
     AIWorkflowModule,
     HomeModule,
+    StickyNotesModule,
   ],
 })
 export class AppModule {}

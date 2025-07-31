@@ -17,12 +17,12 @@ export class StickyNote {
 
   @Column({ 
     name: 'user_id',
-    type: 'bigint',
-    unsigned: true,
+    type: 'varchar',
+    length: 36,
     comment: '用户ID，关联用户表'
   })
   @Index()
-  userId: number;
+  userId: string;
 
   @Column({ 
     name: 'note_id',

@@ -15,6 +15,7 @@ export const DEFAULT_API_PREFIX_CONFIG: ApiPrefixConfig = {
     stocks: 'api/v1/stocks',
     system: 'api/v1/system',
     'ai-workflow': 'api/v1/ai-workflow',
+    'sticky-notes': 'api/v1/sticky-notes',
     // 可以根据需要添加更多模块前缀
     // admin: 'api/v1/admin',
     // public: 'api/public',

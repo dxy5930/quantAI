@@ -53,7 +53,9 @@ class StickyNoteStore {
 
   // 获取便利贴配置
   getNote(id: string): StickyNoteConfig | undefined {
-    return this.notes.get(id);
+    const note = this.notes.get(id);
+    console.log('stickyNoteStore.getNote:', { id, found: !!note, mapSize: this.notes.size, availableIds: Array.from(this.notes.keys()) });
+    return note;
   }
 
   // 获取所有便利贴
@@ -64,29 +66,41 @@ class StickyNoteStore {
   // 创建新便利贴
   createNote(
     id: string,
-    options: Partial<Omit<StickyNoteConfig, 'id' | 'createdAt' | 'updatedAt'>> = {}
+    options: Partial<Omit<StickyNoteConfig, 'id' | 'createdAt' | 'updatedAt'>> = {},
+    force: boolean = false
   ): StickyNoteConfig {
-    const now = Date.now();
-    const maxZIndex = Math.max(0, ...Array.from(this.notes.values()).map(n => n.zIndex));
-    
-    const defaultConfig: StickyNoteConfig = {
-      id,
-      isOpen: false,
-      content: '<p>欢迎使用便利贴功能！</p><p>你可以在这里记录任何想法和笔记。</p>',
-      position: { x: 100 + (this.notes.size * 20), y: 100 + (this.notes.size * 20) },
-      size: { width: 400, height: 300 },
-      color: 'yellow',
-      title: '我的便利贴',
-      isMinimized: false,
-      zIndex: maxZIndex + 1,
-      createdAt: now,
-      updatedAt: now,
-      ...options,
-    };
+    console.log('stickyNoteStore.createNote:', { id, force, hasExisting: this.notes.has(id) });
+    // 如果force为true或者便签不存在，则创建新的便签
+    if (force || !this.notes.has(id)) {
+      const now = Date.now();
+      const maxZIndex = Math.max(0, ...Array.from(this.notes.values()).map(n => n.zIndex));
+      
+      const defaultConfig: StickyNoteConfig = {
+        id,
+        isOpen: false,
+        content: '<p>欢迎使用便利贴功能！</p><p>你可以在这里记录任何想法和笔记。</p>',
+        position: { x: 100 + (this.notes.size * 20), y: 100 + (this.notes.size * 20) },
+        size: { width: 400, height: 300 },
+        color: 'yellow',
+        title: '我的便利贴',
+        isMinimized: false,
+        zIndex: maxZIndex + 1,
+        createdAt: now,
+        updatedAt: now,
+        ...options,
+      };
 
-    this.notes.set(id, defaultConfig);
-    this.saveToStorage();
-    return defaultConfig;
+      console.log('stickyNoteStore.createNote: 创建新便签', defaultConfig);
+      this.notes.set(id, defaultConfig);
+      this.saveToStorage();
+      console.log('stickyNoteStore.createNote: 便签已保存到Map，当前Map大小:', this.notes.size);
+      return defaultConfig;
+    }
+    
+    // 如果便签已存在且不强制创建，返回现有配置
+    const existing = this.notes.get(id)!;
+    console.log('stickyNoteStore.createNote: 返回现有便签', existing);
+    return existing;
   }
 
   // 更新便利贴配置
@@ -105,8 +119,11 @@ class StickyNoteStore {
 
   // 打开便利贴
   openNote(id: string) {
+    console.log('stickyNoteStore.openNote:', id);
     this.updateNote(id, { isOpen: true });
     this.bringToFront(id);
+    const updatedNote = this.notes.get(id);
+    console.log('stickyNoteStore.openNote 完成:', { id, isOpen: updatedNote?.isOpen });
   }
 
   // 关闭便利贴
@@ -117,12 +134,17 @@ class StickyNoteStore {
   // 切换便利贴显示状态
   toggleNote(id: string) {
     const note = this.notes.get(id);
+    console.log('stickyNoteStore.toggleNote:', { id, note: !!note, currentIsOpen: note?.isOpen });
     if (note) {
       if (note.isOpen) {
+        console.log('stickyNoteStore: 关闭便利贴');
         this.closeNote(id);
       } else {
+        console.log('stickyNoteStore: 打开便利贴');
         this.openNote(id);
       }
+    } else {
+      console.log('stickyNoteStore: 便利贴不存在');
     }
   }
 

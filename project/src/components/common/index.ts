@@ -38,3 +38,6 @@ export { LazyImage, ProgressiveImage } from './LazyImage';
 export { PageHeader, SimplePageHeader } from './PageHeader'; 
 export { default as AIAnalysisLoader } from './AIAnalysisLoader';
 export { default as StickyNote } from './StickyNote';
+export { default as StickyNoteHistoryPopover } from './StickyNoteHistoryPopover';
+export { default as StickyNoteModal } from './StickyNoteModal';
+export { default as Modal } from './Modal';
