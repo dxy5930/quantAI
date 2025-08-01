@@ -3,6 +3,7 @@ import { X, Palette, Minimize2, Maximize2, Save, Check } from 'lucide-react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import { getColorOptions, getStickyNoteClasses, StickyNoteColor } from '../../utils/stickyNoteColors';
+import ConfirmModal from './ConfirmModal';
 
 interface StickyNoteProps {
   id: string;
@@ -43,10 +44,14 @@ const StickyNote: React.FC<StickyNoteProps> = ({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
   const [showSaved, setShowSaved] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   // 防抖保存引用
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveDataRef = useRef<string>('');
+  
+  // 添加一个 ref 来持有最新的状态值
+  const currentStateRef = useRef({ title, content, color, isMinimized });
 
   // 固定位置和大小，不从props读取
   const [position, setPosition] = useState(() => {
@@ -74,6 +79,11 @@ const StickyNote: React.FC<StickyNoteProps> = ({
     const centerY = Math.max(0, (window.innerHeight - 400) / 2);
     setPosition({ x: centerX, y: centerY });
   }, [initialTitle, initialContent, initialIsMinimized]); // 移除 initialColor 依赖
+
+  // 更新状态引用
+  useEffect(() => {
+    currentStateRef.current = { title, content, color, isMinimized };
+  }, [title, content, color, isMinimized]);
 
   // 清理定时器
   useEffect(() => {
@@ -116,10 +126,47 @@ const StickyNote: React.FC<StickyNoteProps> = ({
         setTimeout(() => setShowSaved(false), 2000);
       }
     }, 300); // 300ms 防抖延迟
+  }, [onSave]); // 移除状态依赖，避免每次状态变化都重新创建函数
+
+  // 添加一个稳定的保存触发函数
+  const triggerSave = useCallback((silent: boolean = false) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    const currentData = JSON.stringify({ title, content, color, isMinimized });
+    
+    if (currentData === lastSaveDataRef.current) {
+      return;
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      lastSaveDataRef.current = currentData;
+      onSave({
+        title,
+        content,
+        color,
+        isMinimized
+      }, silent);
+      
+      if (!silent) {
+        setShowSaved(true);
+        setTimeout(() => setShowSaved(false), 2000);
+      }
+    }, 300);
   }, [title, content, color, isMinimized, onSave]);
 
+  // 手动保存不使用防抖
   const handleSave = (silent: boolean = false) => {
+    // 清除防抖定时器
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
     // 立即保存，不使用防抖
+    const currentData = JSON.stringify({ title, content, color, isMinimized });
+    lastSaveDataRef.current = currentData;
+    
     onSave({
       title,
       content,
@@ -137,14 +184,27 @@ const StickyNote: React.FC<StickyNoteProps> = ({
     const newIsMinimized = !isMinimized;
     setIsMinimized(newIsMinimized);
     // 自动保存最小化状态
-    setTimeout(() => {
-      onSave({
-        title,
-        content,
-        color,
-        isMinimized: newIsMinimized
-      }, true);
-    }, 100);
+    // setTimeout(() => {
+    //   onSave({
+    //     title,
+    //     content,
+    //     color,
+    //     isMinimized: newIsMinimized
+    //   }, true);
+    // }, 100);
+  };
+
+  const handleClose = () => {
+    setShowCloseConfirm(true);
+  };
+
+  const confirmClose = () => {
+    setShowCloseConfirm(false);
+    onClose();
+  };
+
+  const cancelClose = () => {
+    setShowCloseConfirm(false);
   };
 
   // ReactQuill 配置
@@ -225,7 +285,7 @@ const StickyNote: React.FC<StickyNoteProps> = ({
     const style = document.createElement('style');
     style.textContent = `
       .sticky-note-editor .ql-editor {
-        padding: 16px;
+        padding: 16px 16px 64px 16px;
         min-height: 200px;
         font-size: 14px;
         line-height: 1.5;
@@ -329,7 +389,13 @@ const StickyNote: React.FC<StickyNoteProps> = ({
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          onBlur={() => debouncedSave(true)}
+          // onBlur={() => {
+          //   // 只在标题真正改变时才保存
+          //   const currentData = JSON.stringify(currentStateRef.current);
+          //   if (currentData !== lastSaveDataRef.current) {
+          //     triggerSave(true);
+          //   }
+          // }}
           className={`flex-1 bg-transparent ${colorClasses.text} font-medium text-lg border-none outline-none placeholder-gray-500 dark:placeholder-gray-400 no-drag`}
           placeholder="便利贴标题..."
         />
@@ -360,7 +426,7 @@ const StickyNote: React.FC<StickyNoteProps> = ({
           </button>
           
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-white hover:bg-opacity-50 dark:hover:bg-gray-700 dark:hover:bg-opacity-50 rounded"
             title="关闭"
           >
@@ -384,7 +450,10 @@ const StickyNote: React.FC<StickyNoteProps> = ({
                       key={option.value}
                       onClick={() => {
                         setColor(option.value);
-                        // 不立即保存，只在用户保存时才提交颜色变化
+                        // 暂时注释自动保存颜色变化
+                        // setTimeout(() => {
+                        //   triggerSave(true);
+                        // }, 500);
                       }}
                       className={`w-6 h-6 rounded-full border-2 ${option.bg} ${option.border} ${
                         color === option.value ? 'ring-2 ring-gray-400 dark:ring-gray-500' : ''
@@ -398,19 +467,27 @@ const StickyNote: React.FC<StickyNoteProps> = ({
           </div>
 
           {/* ReactQuill 编辑区域 */}
-          <div className="flex-1 no-drag sticky-note-editor" style={{ minHeight: '200px' }}>
+          <div className="flex-1 no-drag sticky-note-editor pb-4" style={{ minHeight: '200px' }}>
             <ReactQuill
               ref={quillRef}
               value={content}
               onChange={(value) => {
                 setContent(value);
+                // 暂时注释实时保存，只在手动保存时保存
+                // triggerSave(true);
               }}
-              onBlur={() => debouncedSave(true)}
+              // onBlur={() => {
+              //   // 只在真正失去焦点且内容有变化时才保存
+              //   const currentData = JSON.stringify(currentStateRef.current);
+              //   if (currentData !== lastSaveDataRef.current) {
+              //     triggerSave(true);
+              //   }
+              // }}
               modules={quillModules}
               formats={quillFormats}
               theme="snow"
               style={{ 
-                height: 'calc(100% - 42px)', 
+                height: 'calc(100% - 58px)', 
                 display: 'flex',
                 flexDirection: 'column'
               }}
@@ -428,6 +505,18 @@ const StickyNote: React.FC<StickyNoteProps> = ({
           style={{ clipPath: 'polygon(100% 0, 0 100%, 100% 100%)' }}
         />
       )}
+
+      {/* 关闭确认对话框 */}
+      <ConfirmModal
+        isOpen={showCloseConfirm}
+        onConfirm={confirmClose}
+        onCancel={cancelClose}
+        title="确认关闭"
+        message="关闭便利贴后，未保存的更改可能会丢失。确定要关闭吗？"
+        confirmText="确认关闭"
+        cancelText="取消"
+        variant="danger"
+      />
     </div>
   );
 };

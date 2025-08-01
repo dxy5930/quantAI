@@ -41,3 +41,4 @@ export { default as StickyNote } from './StickyNote';
 export { default as StickyNoteHistoryPopover } from './StickyNoteHistoryPopover';
 export { default as StickyNoteModal } from './StickyNoteModal';
 export { default as Modal } from './Modal';
+export { default as ConfirmModal } from './ConfirmModal';

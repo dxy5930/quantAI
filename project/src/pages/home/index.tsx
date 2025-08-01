@@ -99,99 +99,14 @@ const HomePage: React.FC = observer(() => {
       <StatsGrid stats={app.stats} loading={app.statsLoading} />
 
       {/* 核心功能展示区 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* 实时AI解盘 */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center space-x-3 mb-4">
-            <TrendingUp className="h-6 w-6 text-green-500" />
-            <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-              实时AI解盘
-            </h3>
-          </div>
-          {home.sentimentLoading ? (
-            <div className="space-y-4 animate-pulse">
-              <div className="bg-gray-200 dark:bg-gray-700 rounded-lg h-20"></div>
-              <div className="space-y-2">
-                <div className="bg-gray-200 dark:bg-gray-700 rounded h-4"></div>
-                <div className="bg-gray-200 dark:bg-gray-700 rounded h-4 w-3/4"></div>
-              </div>
-            </div>
-          ) : home.marketSentiment ? (
-            <div className="space-y-4">
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  市场情绪指数
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full ${
-                        home.marketSentiment.level === "bullish"
-                          ? "bg-green-500"
-                          : home.marketSentiment.level === "bearish"
-                          ? "bg-red-500"
-                          : "bg-yellow-500"
-                      }`}
-                      style={{ width: `${home.marketSentiment.index}%` }}
-                    ></div>
-                  </div>
-                  <span
-                    className={`font-semibold ${
-                      home.marketSentiment.level === "bullish"
-                        ? "text-green-500"
-                        : home.marketSentiment.level === "bearish"
-                        ? "text-red-500"
-                        : "text-yellow-500"
-                    }`}
-                  >
-                    {home.marketSentiment.index}%
-                  </span>
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {home.marketSentiment.description}
-                </div>
-              </div>
-              {home.marketAnalysis && (
-                <div className="text-gray-700 dark:text-gray-300 space-y-1">
-                  {Array.isArray(home.marketAnalysis.insights) ? (
-                    home.marketAnalysis.insights.map((insight, index) => (
-                      <p key={index}>• {String(insight)}</p>
-                    ))
-                  ) : (
-                    <p>• 暂无分析洞察</p>
-                  )}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  市场情绪指数
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                    <div
-                      className="bg-gray-400 h-2 rounded-full"
-                      style={{ width: "50%" }}
-                    ></div>
-                  </div>
-                  <span className="text-gray-400 font-semibold">--</span>
-                </div>
-              </div>
-              <div className="text-gray-500 dark:text-gray-400 text-center py-4">
-                {home.sentimentError || "暂无市场分析数据"}
-              </div>
-            </div>
-          )}
-        </div>
-
+      <div className="space-y-8">
+        
         {/* AI选股体验 */}
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
           <div className="flex items-center space-x-3 mb-4">
             <Target className="h-6 w-6 text-blue-500" />
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-              试试AI选股
+              试试AI鉴股
             </h3>
           </div>
           <div className="space-y-4">
@@ -438,6 +353,92 @@ const HomePage: React.FC = observer(() => {
             )}
           </div>
         </div>
+        {/* 实时AI解盘 */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center space-x-3 mb-4">
+            <TrendingUp className="h-6 w-6 text-green-500" />
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+              实时AI解盘
+            </h3>
+          </div>
+          {home.sentimentLoading ? (
+            <div className="space-y-4 animate-pulse">
+              <div className="bg-gray-200 dark:bg-gray-700 rounded-lg h-20"></div>
+              <div className="space-y-2">
+                <div className="bg-gray-200 dark:bg-gray-700 rounded h-4"></div>
+                <div className="bg-gray-200 dark:bg-gray-700 rounded h-4 w-3/4"></div>
+              </div>
+            </div>
+          ) : home.marketSentiment ? (
+            <div className="space-y-4">
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  市场情绪指数
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full ${
+                        home.marketSentiment.level === "bullish"
+                          ? "bg-green-500"
+                          : home.marketSentiment.level === "bearish"
+                          ? "bg-red-500"
+                          : "bg-yellow-500"
+                      }`}
+                      style={{ width: `${home.marketSentiment.index}%` }}
+                    ></div>
+                  </div>
+                  <span
+                    className={`font-semibold ${
+                      home.marketSentiment.level === "bullish"
+                        ? "text-green-500"
+                        : home.marketSentiment.level === "bearish"
+                        ? "text-red-500"
+                        : "text-yellow-500"
+                    }`}
+                  >
+                    {home.marketSentiment.index}%
+                  </span>
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {home.marketSentiment.description}
+                </div>
+              </div>
+              {home.marketAnalysis && (
+                <div className="text-gray-700 dark:text-gray-300 space-y-1">
+                  {Array.isArray(home.marketAnalysis.insights) ? (
+                    home.marketAnalysis.insights.map((insight, index) => (
+                      <p key={index}>• {String(insight)}</p>
+                    ))
+                  ) : (
+                    <p>• 暂无分析洞察</p>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                  市场情绪指数
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                    <div
+                      className="bg-gray-400 h-2 rounded-full"
+                      style={{ width: "50%" }}
+                    ></div>
+                  </div>
+                  <span className="text-gray-400 font-semibold">--</span>
+                </div>
+              </div>
+              <div className="text-gray-500 dark:text-gray-400 text-center py-4">
+                {home.sentimentError || "暂无市场分析数据"}
+              </div>
+            </div>
+          )}
+        </div>
+
       </div>
 
       {/* 策略收益展示 */}

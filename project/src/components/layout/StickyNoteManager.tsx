@@ -158,7 +158,7 @@ const StickyNoteManager: React.FC = () => {
       <div className="flex items-center space-x-2">
         <div className="relative group">
           <button
-            onClick={handleCreateNew}
+            // onClick={handleCreateNew}
             className="p-2 text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300 hover:bg-yellow-50 dark:hover:bg-yellow-900 dark:hover:bg-opacity-20 rounded-lg transition-colors"
             title="便利贴"
           >
