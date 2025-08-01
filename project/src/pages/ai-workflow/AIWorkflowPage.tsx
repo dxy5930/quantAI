@@ -32,7 +32,7 @@ const AIWorkflowPage: React.FC = observer(() => {
   const { user, app } = useStore();
   const [showHistory, setShowHistory] = useState(false);
   const [currentWorkflow, setCurrentWorkflow] = useState<Workflow | null>(null);
-  
+
   // 历史按钮引用
   const historyButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -43,7 +43,10 @@ const AIWorkflowPage: React.FC = observer(() => {
 
   // 运行工作流
   const handleWorkflowRun = useCallback(
-    async (workflow: Workflow, startPolling?: (executionId: string) => void) => {
+    async (
+      workflow: Workflow,
+      startPolling?: (executionId: string) => void
+    ) => {
       try {
         console.log("运行工作流:", workflow);
 
@@ -64,7 +67,7 @@ const AIWorkflowPage: React.FC = observer(() => {
         if (workflowResponse.success) {
           console.log("工作流启动成功:", workflowResponse.data);
           app.showSuccess("工作流启动成功！", "运行成功");
-          
+
           // 如果返回了执行ID，开始轮询状态
           if (workflowResponse.data?.executionId && startPolling) {
             console.log("开始轮询执行状态:", workflowResponse.data.executionId);
@@ -96,13 +99,14 @@ const AIWorkflowPage: React.FC = observer(() => {
         console.log("保存工作流:", workflow);
 
         let saveResponse;
-        
+
         // 判断是创建新工作流还是更新现有工作流
         // 如果工作流ID为空或者是临时生成的ID，则创建新工作流
-        const isNewWorkflow = !workflow.id || 
-          workflow.id === "" || 
-          workflow.id.startsWith('temp_workflow_') || 
-          workflow.id.startsWith('workflow_');
+        const isNewWorkflow =
+          !workflow.id ||
+          workflow.id === "" ||
+          workflow.id.startsWith("temp_workflow_") ||
+          workflow.id.startsWith("workflow_");
 
         if (isNewWorkflow) {
           console.log("创建新工作流");
@@ -128,14 +132,14 @@ const AIWorkflowPage: React.FC = observer(() => {
             updatedAt: new Date(saveResponse.data.updatedAt),
           };
           setCurrentWorkflow(updatedWorkflow);
-          
+
           // 保存成功
-          
+
           app.showSuccess(
-            isNewWorkflow ? "工作流创建成功！" : "工作流更新成功！", 
+            isNewWorkflow ? "工作流创建成功！" : "工作流更新成功！",
             "保存成功"
           );
-          
+
           // 返回更新后的工作流，让 WorkflowCanvas 组件也能获取到新的ID
           return updatedWorkflow;
         } else {
@@ -160,34 +164,37 @@ const AIWorkflowPage: React.FC = observer(() => {
   const loadHistoryWorkflow = async (workflowId: string) => {
     try {
       console.log("开始加载工作流:", workflowId);
-      
+
       const workflowResponse = await aiWorkflowApi.getWorkflow(workflowId);
       console.log("工作流API响应:", workflowResponse);
-      
+
       if (workflowResponse.success && workflowResponse.data) {
         const data = workflowResponse.data;
-        const validStatuses = ['idle', 'running', 'completed', 'error'];
-        
+        const validStatuses = ["idle", "running", "completed", "error"];
+
         const loadedWorkflow = {
           ...data,
           createdAt: new Date(data.createdAt),
           updatedAt: new Date(data.updatedAt),
-          status: ((data.status as string) === 'draft' ? 'idle' : 
-                  (validStatuses.includes(data.status as string) ? data.status : 'idle')) as any,
+          status: ((data.status as string) === "draft"
+            ? "idle"
+            : validStatuses.includes(data.status as string)
+            ? data.status
+            : "idle") as any,
           nodes: data.nodes || [],
           connections: data.connections || [],
         };
-        
+
         console.log("工作流加载完成:", {
           name: loadedWorkflow.name,
           nodeCount: loadedWorkflow.nodes.length,
-          connectionCount: loadedWorkflow.connections.length
+          connectionCount: loadedWorkflow.connections.length,
         });
-        
+
         setCurrentWorkflow(loadedWorkflow);
         setShowHistory(false);
         app.showSuccess(
-          `${loadedWorkflow.name} (${loadedWorkflow.nodes.length}个节点)`, 
+          `${loadedWorkflow.name} (${loadedWorkflow.nodes.length}个节点)`,
           "加载成功"
         );
       } else {
@@ -227,7 +234,7 @@ const AIWorkflowPage: React.FC = observer(() => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen">
       <div className="max-w-full mx-auto px-4 py-6">
         {/* 页面标题 */}
         <div className="mb-6">
@@ -295,35 +302,36 @@ const AIWorkflowPage: React.FC = observer(() => {
           triggerElement={historyButtonRef.current}
           position="bottom"
         >
-          <WorkflowHistoryPopover
-            onLoadWorkflow={loadHistoryWorkflow}
-          />
+          <WorkflowHistoryPopover onLoadWorkflow={loadHistoryWorkflow} />
         </Modal>
 
-        {/* 工作流画布 */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 h-[calc(100vh-200px)]">
-          <WorkflowCanvas
-            onWorkflowRun={handleWorkflowRun}
-            onWorkflowSave={handleWorkflowSave}
-            initialWorkflow={currentWorkflow}
-          />
-        </div>
+        {/* 主内容区域 - 左右分栏 */}
+        <div className="flex gap-6 h-[calc(100vh-200px)]">
+          {/* 工作流画布 - 左侧主要区域 */}
+          <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+            <WorkflowCanvas
+              onWorkflowRun={handleWorkflowRun}
+              onWorkflowSave={handleWorkflowSave}
+              initialWorkflow={currentWorkflow}
+            />
+          </div>
 
-        {/* 使用提示 */}
-        <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-          <div className="flex items-start space-x-3">
-            <Bot className="w-5 h-5 text-blue-600 mt-0.5" />
-            <div>
-              <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-1">
-                如何使用 FindValue AI 工作流
-              </h4>
-              <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-                <li>• 从左侧节点库拖拽节点到画布中</li>
-                <li>• 连接节点创建数据流向</li>
-                <li>• 配置每个节点的参数</li>
-                <li>• 点击运行按钮执行工作流</li>
-                <li>• 保存和分享你的工作流模板</li>
-              </ul>
+          {/* 使用提示 - 右侧固定宽度 */}
+          <div className="w-80 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+            <div className="flex items-start space-x-3">
+              <Bot className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-3">
+                  如何使用 FindValue AI 工作流
+                </h4>
+                <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-2">
+                  <li>• 从左侧节点库拖拽节点到画布中</li>
+                  <li>• 连接节点创建数据流向</li>
+                  <li>• 配置每个节点的参数</li>
+                  <li>• 点击运行按钮执行工作流</li>
+                  <li>• 保存和分享你的工作流模板</li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
