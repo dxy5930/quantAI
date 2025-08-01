@@ -60,15 +60,17 @@ export class StockSchedulerService {
     data?: any;
   }> {
     try {
-      const pythonPath = process.platform === 'win32' ? 'python' : 'python3';
-      const crawlerPath = '../stock-crawler/main.py';
-      
+      const pythonPath = process.platform === "win32" ? "python" : "python3";
+      const crawlerPath = "../stock-crawler/main.py";
+
       this.logger.log(`执行Python爬虫: ${pythonPath} ${crawlerPath}`);
-      
-      const { stdout, stderr } = await execAsync(`${pythonPath} ${crawlerPath}`, {
-        cwd: process.cwd(),
-        timeout: 300000, // 5分钟超时
-      });
+
+      const { stdout, stderr } = await execAsync(
+        `${pythonPath} ${crawlerPath}`,
+        {
+          cwd: process.cwd(),
+        }
+      );
 
       if (stderr) {
         this.logger.warn(`Python爬虫警告: ${stderr}`);
