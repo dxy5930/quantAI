@@ -1,5 +1,5 @@
-import { NavigateFunction } from 'react-router-dom';
-import { ROUTES, buildPath } from '../constants/routes';
+import { NavigateFunction } from "react-router-dom";
+import { ROUTES } from "../constants/routes";
 
 // 导航工具类
 export class NavigationHelper {
@@ -24,34 +24,9 @@ export class NavigationHelper {
     this.navigate(ROUTES.REGISTER);
   };
 
-  // 导航到策略配置页
-  toStrategyConfig = (strategyId: string) => {
-    this.navigate(buildPath(ROUTES.STRATEGY_CONFIG, { id: strategyId }));
-  };
-
-  // 导航到回测结果页
-  toBacktestResults = () => {
-    this.navigate(ROUTES.BACKTEST_RESULTS);
-  };
-
-  // 导航到回测历史页
-  toBacktestHistory = () => {
-    this.navigate(ROUTES.BACKTEST_HISTORY);
-  };
-
   // 导航到个人资料页
   toProfile = () => {
     this.navigate(ROUTES.PROFILE);
-  };
-
-  // 导航到设置页
-  toSettings = () => {
-    this.navigate(ROUTES.SETTINGS);
-  };
-
-  // 导航到排行榜页
-  toRanking = () => {
-    this.navigate(ROUTES.RANKING);
   };
 
   // 导航到帮助页
@@ -99,16 +74,16 @@ export class NavigationHelper {
 }
 
 // 创建导航助手的Hook
-import { useNavigate } from 'react-router-dom';
-import { useMemo } from 'react';
+import { useNavigate } from "react-router-dom";
+import { useMemo } from "react";
 
 export const useNavigation = () => {
   const navigate = useNavigate();
-  
+
   return useMemo(() => new NavigationHelper(navigate), [navigate]);
 };
 
 // 导出常用的导航方法
 export const createNavigationHelper = (navigate: NavigateFunction) => {
   return new NavigationHelper(navigate);
-}; 
+};

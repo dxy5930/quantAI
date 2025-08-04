@@ -4,7 +4,7 @@ import { TrendingUp, BarChart3, Target, Zap } from 'lucide-react';
 interface AnimatedLogoProps {
   isAnimating?: boolean;
   size?: 'sm' | 'md' | 'lg';
-  type?: 'backtest' | 'analysis' | 'selection' | 'default';
+  type?: 'analysis' | 'selection' | 'default';
   className?: string;
 }
 
@@ -22,8 +22,7 @@ export const AnimatedLogo: React.FC<AnimatedLogoProps> = ({
 
   const getIcon = () => {
     switch (type) {
-      case 'backtest':
-        return BarChart3;
+
       case 'analysis':
         return TrendingUp;
       case 'selection':
@@ -37,8 +36,7 @@ export const AnimatedLogo: React.FC<AnimatedLogoProps> = ({
 
   const getGradient = () => {
     switch (type) {
-      case 'backtest':
-        return 'from-blue-500 to-purple-600';
+
       case 'analysis':
         return 'from-green-500 to-blue-600';
       case 'selection':

@@ -40,7 +40,7 @@ export default defineConfig(({ mode }) => {
       // 确保环境变量在构建时可用
       __APP_VERSION__: JSON.stringify(env.VITE_APP_VERSION || "1.0.0"),
       __APP_TITLE__: JSON.stringify(
-        env.VITE_APP_TITLE || "智能策略回测平台"
+        env.VITE_APP_TITLE || "智能投资助手平台"
       ),
       __API_PREFIX__: JSON.stringify(env.VITE_API_PREFIX || "/api/v1"),
     },

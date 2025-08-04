@@ -14,7 +14,7 @@ export interface StickyNoteConfig {
   updatedAt: number;
 }
 
-class StickyNoteStore {
+export class StickyNoteStore {
   private storageKey = 'sticky-notes-config';
   private notes: Map<string, StickyNoteConfig> = new Map();
 

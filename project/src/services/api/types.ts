@@ -49,14 +49,6 @@ export interface UserInfo {
 
 // 策略类型
 export interface Strategy {
-  backtestResults: { totalReturn: number; annualReturn: number; sharpeRatio: number; maxDrawdown: number; winRate: number; totalTrades: number; backtestType: string; volatility: number; beta: number; alpha: number; };
-  backtestPeriod: { startDate: string; endDate: string; initialCapital: number; backtestType: string; symbols: { symbol: string; name: string; weight: number; sector: string; }[]; };
-  backtestStocks: { symbol: string; name: string; weight: number; sector: string; performance: number; contribution: number; trades: number; avgPrice: number; }[];
-  lastBacktestDate: string;
-  stockRecommendations: import("c:/Users/hsayit/Downloads/chaogu/project/src/types/index").StockRecommendation[];
-  selectionCriteria: { minMarketCap: number; sectors: string[]; minScore: number; maxRisk: string; };
-  lastScreeningDate: string;
-  recommendedStocksCount: number;
   favorites: any;
   likes: any;
   icon: any;
@@ -69,33 +61,9 @@ export interface Strategy {
   created_at: string;
   updated_at: string;
   is_public: boolean;
-  performance?: StrategyPerformance;
 }
 
-// 策略性能类型
-export interface StrategyPerformance {
-  total_return: number;
-  annual_return: number;
-  max_drawdown: number;
-  sharpe_ratio: number;
-  win_rate: number;
-  profit_factor: number;
-}
 
-// 回测请求类型
-export interface BacktestRequest {
-  strategy_id: string;
-  start_date: string;
-  end_date: string;
-  initial_capital: number;
-  symbols: string[];
-  // 扩展字段：权重信息（按symbols顺序对应）
-  weights?: number[];
-  // 扩展字段：再平衡频率
-  rebalance_frequency?: 'daily' | 'weekly' | 'monthly' | 'quarterly';
-  // 扩展字段：手续费
-  commission?: number;
-}
 
 // AI分析结果类型
 export interface AIAnalysis {
@@ -106,54 +74,7 @@ export interface AIAnalysis {
   generated_at: string;
 }
 
-// 回测结果类型
-export interface BacktestResult {
-  id?: string;
-  strategy_id: string;
-  performance?: StrategyPerformance;
-  trades: Trade[];
-  equity_curve: EquityPoint[];
-  created_at?: string;
-  // AI分析结果
-  ai_analysis?: AIAnalysis;
-  // 兼容直接在根级别的性能指标
-  total_return?: number;
-  annual_return?: number;
-  max_drawdown?: number;
-  sharpe_ratio?: number;
-  win_rate?: number;
-  profit_factor?: number;
-  volatility?: number;
-}
 
-// 交易记录类型
-export interface Trade {
-  id: string;
-  symbol: string;
-  side: 'buy' | 'sell';
-  quantity: number;
-  price: number;
-  timestamp: string;
-  pnl: number;
-}
-
-// 权益曲线点类型
-export interface EquityPoint {
-  date: string;
-  value: number;
-}
-
-// 股票信息类型
-export interface StockInfo {
-  symbol: string;
-  name: string;
-  sector: string;
-  industry: string;
-  market_cap: number;
-  price: number;
-  change: number;
-  change_percent: number;
-}
 
 // 认证相关类型
 export interface LoginRequest {

@@ -2,7 +2,7 @@ import { makeAutoObservable, runInAction } from 'mobx';
 import { User, LoginCredentials, RegisterData } from '../types';
 import { authService } from '../services/authService';
 import { HttpError } from '../utils/httpClient';
-import { UserInfo } from '../services/api';
+import { UserInfo } from '../services/api/types';
 
 export class UserStore {
   // 用户状态
@@ -50,7 +50,7 @@ export class UserStore {
       email: userInfo.email,
       avatar: userInfo.avatar,
       role: userInfo.role || 'user',
-      level: userInfo.level,
+      level: userInfo.level || 1, // 默认为普通用户
       createdAt: userInfo.createdAt,
       lastLoginAt: userInfo.lastLoginAt || new Date().toISOString(),
       profile: {
@@ -220,7 +220,7 @@ export class UserStore {
   /**
    * 更新用户资料
    */
-  async updateProfile(profileData: Partial<User['profile']> & { email?: string; avatar?: string }) {
+  async updateProfile(profileData: Partial<UserInfo>) {
     if (!this.currentUser) {
       throw new Error('用户未登录');
     }

@@ -1,5 +1,6 @@
 import { httpClient } from '../../utils/httpClient';
-import { ApiResponse, UserInfo } from './types';
+import { UnifiedApiResponse as ApiResponse } from '../../types';
+import { UserInfo } from './types';
 
 // 获取 API 前缀
 const API_PREFIX = import.meta.env.VITE_API_PREFIX || '/api/v1';
@@ -37,7 +38,9 @@ export const userApi = {
 
   // 上传头像
   async uploadAvatar(file: File): Promise<ApiResponse<{ avatar_url: string }>> {
-    return httpClient.upload(`${API_PREFIX}/users/avatar`, file);
+    const formData = new FormData();
+    formData.append('avatar', file);
+    return httpClient.post(`${API_PREFIX}/users/avatar`, formData);
   },
 
   // 修改密码

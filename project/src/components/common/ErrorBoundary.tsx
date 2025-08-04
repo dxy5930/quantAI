@@ -102,7 +102,7 @@ export class ErrorBoundary extends Component<Props, State> {
             {process.env.NODE_ENV === 'development' && this.state.error && (
               <div className="mb-6 p-4 bg-red-50 rounded-lg text-left">
                 <h3 className="text-sm font-medium text-red-800 mb-2">错误详情:</h3>
-                <pre className="text-xs text-red-700 overflow-auto max-h-32">
+                <pre className="text-xs text-red-700 overflow-auto max-h-32 scrollbar-thin">
                   {this.state.error.message}
                 </pre>
               </div>

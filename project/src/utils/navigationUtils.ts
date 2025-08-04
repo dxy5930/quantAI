@@ -91,7 +91,7 @@ export class SmartNavigationHelper {
       "/strategy-square",
       "/my-strategies",
       "/ranking",
-      "/backtest",
+
       "/profile",
     ];
 
@@ -104,7 +104,7 @@ export class SmartNavigationHelper {
     const dynamicPatterns = [
       /^\/strategy\/[^/]+$/,
       /^\/strategy\/[^/]+\/[^/]+$/,
-      /^\/backtest\/[^/]+$/,
+
       /^\/user\/[^/]+$/,
     ];
 

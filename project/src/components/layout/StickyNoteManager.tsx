@@ -180,7 +180,7 @@ const StickyNoteManager: React.FC = () => {
               </div>
             </div>
             
-            <div className="max-h-96 overflow-y-auto">
+            <div className="max-h-96 overflow-y-auto scrollbar-thin">
               {loading ? (
                 <div className="p-4 text-center text-gray-500 dark:text-gray-400">
                   <div className="w-4 h-4 border border-gray-300 dark:border-gray-600 border-t-blue-600 rounded-full animate-spin mx-auto mb-2" />

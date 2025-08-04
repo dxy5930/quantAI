@@ -110,35 +110,143 @@
   }
 }
 
-/* 自定义滚动条样式 */
+/* 美化的滚动条样式 */
 @layer utilities {
-  .scrollbar-thin {
+  /* 全局滚动条美化 */
+  * {
     scrollbar-width: thin;
-    scrollbar-color: var(--color-border) var(--color-surface);
+    scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
   }
 
-  .scrollbar-thin::-webkit-scrollbar {
+  *::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
 
+  *::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 10px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.6), rgba(139, 92, 246, 0.6));
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(139, 92, 246, 0.8));
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+  }
+
+  *::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* 深色模式下的滚动条 */
+  .dark *::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.6), rgba(167, 139, 250, 0.6));
+  }
+
+  .dark *::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, rgba(96, 165, 250, 0.8), rgba(167, 139, 250, 0.8));
+    box-shadow: 0 0 10px rgba(96, 165, 250, 0.3);
+  }
+
+  .dark *::-webkit-scrollbar-thumb:active {
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+  }
+
+  /* 细版滚动条 */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
   .scrollbar-thin::-webkit-scrollbar-track {
-    background: var(--color-surface);
-    border-radius: 4px;
+    background: transparent;
+    border-radius: 8px;
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: var(--color-border);
-    border-radius: 4px;
-    transition: background 0.3s ease;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.5), rgba(139, 92, 246, 0.5));
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background-clip: content-box;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: var(--color-text-muted);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.7), rgba(139, 92, 246, 0.7));
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.2);
   }
 
-  .scrollbar-thin::-webkit-scrollbar-corner {
-    background: var(--color-surface);
+  /* 精致版滚动条 */
+  .scrollbar-elegant {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(139, 92, 246, 0.4) transparent;
+  }
+
+  .scrollbar-elegant::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .scrollbar-elegant::-webkit-scrollbar-track {
+    background: rgba(248, 250, 252, 0.5);
+    border-radius: 12px;
+    border: 1px solid rgba(226, 232, 240, 0.3);
+  }
+
+  .scrollbar-elegant::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    border-radius: 12px;
+    border: 2px solid rgba(248, 250, 252, 0.8);
+    box-shadow: 
+      0 2px 4px rgba(59, 130, 246, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .scrollbar-elegant::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #2563eb, #7c3aed);
+    box-shadow: 
+      0 4px 8px rgba(59, 130, 246, 0.3),
+      0 0 20px rgba(139, 92, 246, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    transform: scale(1.05);
+  }
+
+  .dark .scrollbar-elegant::-webkit-scrollbar-track {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(71, 85, 105, 0.3);
+  }
+
+  .dark .scrollbar-elegant::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    border: 2px solid rgba(30, 41, 59, 0.8);
+    box-shadow: 
+      0 2px 4px rgba(96, 165, 250, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+
+  .dark .scrollbar-elegant::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    box-shadow: 
+      0 4px 8px rgba(96, 165, 250, 0.3),
+      0 0 20px rgba(167, 139, 250, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
   }
   
   /* 隐藏滚动条但保持功能 */

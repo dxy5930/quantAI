@@ -76,13 +76,7 @@ export const message = {
         title = 'AI服务错误';
         content = customMessage || 'AI分析服务暂时不可用，请稍后重试';
         break;
-      case ErrorCode.BACKTEST_FAILED:
-        title = '回测失败';
-        content = customMessage || '回测执行失败，请检查参数后重试';
-        break;
-      case ErrorCode.BACKTEST_LIMIT_EXCEEDED:
-        title = '回测限制';
-        content = customMessage || '今日回测次数已达上限，请明日再试';
+
         break;
       case ErrorCode.STOCK_NOT_FOUND:
         title = '股票不存在';

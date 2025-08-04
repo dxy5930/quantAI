@@ -309,7 +309,7 @@ export class AppStore {
     title: string,
     message: string,
     link?: string,
-    category?: "system" | "backtest" | "user" | "strategy" | "ranking"
+    category?: "system" | "user" | "strategy" | "ranking"
   ) => {
     this.addNotification({
       type,
@@ -321,20 +321,7 @@ export class AppStore {
     });
   };
 
-  // 回测相关通知
-  showBacktestNotification = (
-    message: string,
-    title?: string,
-    link?: string
-  ) => {
-    this.showNotificationWithLink(
-      "success",
-      title || "回测完成",
-      message,
-      link || "/backtest/results",
-      "backtest"
-    );
-  };
+
 
   // 策略相关通知
   showStrategyNotification = (
@@ -420,7 +407,7 @@ interface Notification {
   duration?: number;
   timestamp: string;
   link?: string; // 可选的跳转链接
-  category?: "system" | "backtest" | "user" | "strategy" | "ranking"; // 通知分类
+  category?: "system" | "user" | "strategy" | "ranking"; // 通知分类
   read?: boolean; // 是否已读
 }
 

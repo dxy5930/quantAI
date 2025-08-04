@@ -3,8 +3,6 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { PythonApiClient } from "../../shared/clients/python-api.client";
 import { User } from "../../shared/entities/user.entity";
-import { Strategy } from "../../shared/entities/strategy.entity";
-import { BacktestHistory } from "../../shared/entities/backtest-history.entity";
 
 @Injectable()
 export class HomeService {
@@ -13,10 +11,8 @@ export class HomeService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
-    @InjectRepository(Strategy)
-    private strategyRepository: Repository<Strategy>,
-    @InjectRepository(BacktestHistory)
-    private backtestHistoryRepository: Repository<BacktestHistory>,
+    private strategyRepository: Repository<any>,
+    private backtestHistoryRepository: Repository<any>,
     private readonly pythonApiClient: PythonApiClient
   ) {}
 

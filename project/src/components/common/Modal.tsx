@@ -251,7 +251,7 @@ const Modal: React.FC<ModalProps> = ({
             )}
             
             {/* Popover内容 */}
-            <div className="overflow-y-auto" style={{ maxHeight: '300px' }}>
+            <div className="overflow-y-auto scrollbar-thin" style={{ maxHeight: '300px' }}>
               <div className="p-2">
                 {children}
               </div>

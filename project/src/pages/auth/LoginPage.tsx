@@ -28,7 +28,7 @@ const LoginPage: React.FC = observer(() => {
     if (savedReturnUrl) return savedReturnUrl;
     
     // 3. 默认返回首页
-    return '/';
+    return ROUTES.HOME;
   };
 
   const handleInputChange = (field: 'username' | 'password', value: string) => {

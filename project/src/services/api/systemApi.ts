@@ -19,8 +19,7 @@ export interface SystemStats {
     publicStrategies: number;
     totalUsers: number;
     activeUsers: number;
-    totalBacktests: number;
-    successfulBacktests: number;
+
     avgRating: string;
     uptime: string;
   };

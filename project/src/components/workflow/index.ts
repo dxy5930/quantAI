@@ -1,6 +1,12 @@
-export { default as WorkflowCanvas } from './WorkflowCanvas';
-export { default as NodeConfigPanel } from './NodeConfigPanel';
-export { default as WorkflowTemplates } from './WorkflowTemplates';
-export { default as WorkflowHistoryPopover } from './WorkflowHistoryPopover';
-export { default as WorkflowResultsDisplay } from './WorkflowResultsDisplay';
-export { default as WorkflowResultsModal } from './WorkflowResultsModal';
+export { WorkflowLayout } from './WorkflowLayout';
+export { WorkflowToolbar } from './WorkflowToolbar';
+export { WorkflowList } from './WorkflowList';
+export { WorkflowCanvas } from './WorkflowCanvas';
+export { WorkspacePanel } from './WorkspacePanel';
+export { BrowserResourcePanel } from './BrowserResourcePanel';
+
+export { default as WorkflowLayoutDefault } from './WorkflowLayout';
+export { default as WorkflowToolbarDefault } from './WorkflowToolbar';
+export { default as WorkflowListDefault } from './WorkflowList';
+export { default as WorkflowCanvasDefault } from './WorkflowCanvas';
+export { default as WorkspacePanelDefault } from './WorkspacePanel'; 

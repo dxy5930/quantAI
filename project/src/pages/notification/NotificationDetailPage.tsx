@@ -99,9 +99,7 @@ const NotificationDetailPage: React.FC = observer(() => {
     } else {
       // 根据通知分类或内容决定跳转到哪个页面
       switch (notification?.category) {
-        case 'backtest':
-          navigate(ROUTES.BACKTEST_RESULTS);
-          break;
+
         case 'strategy':
           navigate(ROUTES.HOME);
           break;
@@ -113,8 +111,8 @@ const NotificationDetailPage: React.FC = observer(() => {
           break;
         default:
           // 根据消息内容推断跳转页面
-          if (notification?.message.includes('回测') || notification?.message.includes('策略')) {
-            navigate(ROUTES.BACKTEST_RESULTS);
+          if (notification?.message.includes('策略')) {
+            navigate(ROUTES.HOME);
           } else if (notification?.message.includes('用户') || notification?.message.includes('账户')) {
             navigate(ROUTES.SETTINGS);
           } else if (notification?.message.includes('排行') || notification?.message.includes('排名')) {

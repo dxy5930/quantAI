@@ -4,28 +4,19 @@ import { ROUTES } from '../constants/routes';
 import { Layout } from '../components/layout/Layout';
 import { AuthLayout } from './layouts/AuthLayout';
 import { MinimalLayout } from './layouts/MinimalLayout';
+import { WorkflowPageLayout } from './layouts/WorkflowLayout';
 import { RouteGuard } from './RouteGuard';
 
 // 懒加载页面组件
-const HomePage = lazy(() => import('../pages/home'));
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'));
 const RegisterPage = lazy(() => import('../pages/auth/RegisterPage'));
 const ForgotPasswordPage = lazy(() => import('../pages/auth/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('../pages/auth/ResetPasswordPage'));
-const StrategyConfigPage = lazy(() => import('../pages/strategy/StrategyConfigPage'));
-const StockSelectionConfigPage = lazy(() => import('../pages/strategy/StockSelectionConfigPage'));
-const BacktestConfigPage = lazy(() => import('../pages/strategy/BacktestConfigPage'));
-const BacktestResultsPage = lazy(() => import('../pages/backtest/BacktestResultsPage'));
-
-// 其他页面组件
-const BacktestHistoryPage = lazy(() => import('../pages/backtest/BacktestHistoryPage'));
 const ProfilePage = lazy(() => import('../pages/user/ProfilePage'));
-const SettingsPage = lazy(() => import('../pages/user/SettingsPage'));
 const ChangePasswordPage = lazy(() => import('../pages/user/ChangePasswordPage'));
-const StrategySquarePage = lazy(() => import('../pages/ranking')); // 重命名为策略广场
-const StrategyDetailPage = lazy(() => import('../pages/strategy/StrategyDetailPage'));
-const MyStrategiesPage = lazy(() => import('../pages/strategy/MyStrategiesPage'));
 const AIWorkflowPage = lazy(() => import('../pages/ai-workflow'));
+const PricingPage = lazy(() => import('../pages/pricing'));
+const FeedbackPage = lazy(() => import('../pages/feedback'));
 const HelpPage = lazy(() => import('../pages/help'));
 const AboutPage = lazy(() => import('../pages/about'));
 const NotificationDetailPage = lazy(() => import('../pages/notification/NotificationDetailPage'));
@@ -79,132 +70,68 @@ export const routes: RouteObject[] = [
     ]
   },
 
-  // 主要应用路由（使用默认Layout和路由守卫）
-  // 策略详情页路由（不需要登录验证）
+  // 主要应用路由（使用默认Layout）
   {
-    path: ROUTES.STRATEGY_DETAIL,
+    path: ROUTES.HOME,
     element: <Layout />,
-    children: [
-      {
-        index: true,
-        element: <StrategyDetailPage />
-      }
-    ]
-  },
-  {
-    path: ROUTES.STRATEGY_SQUARE_DETAIL,
-    element: <Layout />,
-    children: [
-      {
-        index: true,
-        element: <StrategyDetailPage />
-      }
-    ]
-  },
-
-  {
-    path: '/',
-    element: (
-      <RouteGuard>
-        <Layout />
-      </RouteGuard>
-    ),
     children: [
       // 首页
       {
         index: true,
-        element: <HomePage />
+        element: <div>首页</div> // 临时占位符
       },
       
-      // 策略配置路由（需要登录验证）
-      {
-        path: ROUTES.STRATEGY_CONFIG,
-        element: <StrategyConfigPage />
-      },
-      {
-        path: ROUTES.STRATEGY_STOCK_SELECTION_CONFIG,
-        element: <StockSelectionConfigPage />
-      },
-      {
-        path: ROUTES.STRATEGY_BACKTEST_CONFIG,
-        element: <BacktestConfigPage />
-      },
-      
-      // 创建策略配置路由
-      {
-        path: ROUTES.CREATE_STOCK_SELECTION,
-        element: <StockSelectionConfigPage />
-      },
-      {
-        path: ROUTES.CREATE_BACKTEST,
-        element: <BacktestConfigPage />
-      },
-      
-      // 回测相关路由
-      {
-        path: ROUTES.BACKTEST_RESULTS,
-        element: <BacktestResultsPage />
-      },
-      {
-        path: ROUTES.BACKTEST_HISTORY,
-        element: <BacktestHistoryPage />
-      },
-      
-      // 用户相关路由
+      // 用户相关页面
       {
         path: ROUTES.PROFILE,
-        element: <ProfilePage />
-      },
-      {
-        path: ROUTES.SETTINGS,
-        element: <SettingsPage />
+        element: <RouteGuard><ProfilePage /></RouteGuard>
       },
       {
         path: ROUTES.CHANGE_PASSWORD,
-        element: <ChangePasswordPage />
+        element: <RouteGuard><ChangePasswordPage /></RouteGuard>
       },
       
-      // 策略广场相关路由
-      {
-        path: ROUTES.STRATEGY_SQUARE,
-        element: <StrategySquarePage />
-      },
-      {
-        path: ROUTES.MY_STRATEGIES,
-        element: <MyStrategiesPage />
-      },
-      {
-        path: ROUTES.MY_STRATEGIES_CREATE,
-        element: <MyStrategiesPage />
-      },
-      {
-        path: ROUTES.MY_STRATEGIES_EDIT,
-        element: <MyStrategiesPage />
-      },
+
       
-      // AI智能体工作流
-      {
-        path: ROUTES.AI_WORKFLOW,
-        element: <AIWorkflowPage />
-      },
-      
-      // 其他功能路由
-      {
-        path: ROUTES.HELP,
-        element: <HelpPage />
-      },
+      // 其他页面
       {
         path: ROUTES.ABOUT,
         element: <AboutPage />
       },
       {
+        path: ROUTES.HELP,
+        element: <HelpPage />
+      },
+      {
+        path: ROUTES.PRICING,
+        element: <PricingPage />
+      },
+      {
+        path: ROUTES.FEEDBACK,
+        element: <FeedbackPage />
+      },
+      
+      // 通知相关
+      {
         path: ROUTES.NOTIFICATION_DETAIL,
-        element: <NotificationDetailPage />
+        element: <RouteGuard><NotificationDetailPage /></RouteGuard>
       }
     ]
   },
 
-  // 错误页面路由（使用简化Layout）
+  // AI工作流路由（使用工作流布局）
+  {
+    path: ROUTES.AI_WORKFLOW,
+    element: <WorkflowPageLayout />,
+    children: [
+      {
+        index: true,
+        element: <RouteGuard><AIWorkflowPage /></RouteGuard>
+      }
+    ]
+  },
+
+  // 错误页面路由（使用最小布局）
   {
     path: ROUTES.NOT_FOUND,
     element: <MinimalLayout />,
@@ -236,7 +163,7 @@ export const routes: RouteObject[] = [
     ]
   },
 
-  // 通配符路由 - 处理所有未匹配的路由
+  // 404 兜底路由
   {
     path: '*',
     element: <MinimalLayout />,
@@ -249,5 +176,4 @@ export const routes: RouteObject[] = [
   }
 ];
 
-// 导出路由配置以供其他地方使用
 export default routes; 

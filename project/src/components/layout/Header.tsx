@@ -5,8 +5,8 @@ import {
   User,
   Bell,
   Settings,
-  Home,
-  Share2,
+  DollarSign,
+  History,
   User as UserIcon,
   LogOut,
   LogIn,
@@ -33,22 +33,15 @@ export const Header: React.FC = observer(() => {
   const [showNotificationModal, setShowNotificationModal] = useState(false);
 
   const navItems = [
-    { path: "/", label: "首页", icon: Home },
-    { path: "/strategy-square", label: "策略广场", icon: Share2 },
-    {
-      path: "/my-strategies",
-      label: "我的策略",
-      icon: UserIcon,
-      requiresAuth: true,
-    },
-    { path: "/ai-workflow", label: "AI智能体", icon: Bot, requiresAuth: true },
+    { path: ROUTES.AI_WORKFLOW, label: "工作流", icon: Bot, requiresAuth: true },
+    // 定价功能已移至意见反馈页面
   ];
 
   const handleLogout = async () => {
     try {
       await userStore.logout();
       appStore.showSuccess("已成功登出");
-      navigate(ROUTES.HOME);
+      navigate(ROUTES.AI_WORKFLOW);
       setShowUserMenu(false);
     } catch (error) {
       appStore.showError("登出失败，请重试");
@@ -73,7 +66,7 @@ export const Header: React.FC = observer(() => {
 
   return (
     <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 sticky top-0 z-50 transition-all duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo和标题 */}
           <div className="flex items-center space-x-8">
@@ -102,8 +95,8 @@ export const Header: React.FC = observer(() => {
                     >
                       <IconComponent className="w-4 h-4" />
                       <span>{item.label}</span>
-                      {/* 在AI智能体按钮右上角显示徽章 */}
-                      {item.path === "/ai-workflow" && (
+                      {/* 在工作流按钮右上角显示徽章 */}
+                      {item.path === ROUTES.AI_WORKFLOW && (
                         <div className="absolute -top-2 -right-2">
                           <Badge
                             icon="Sparkles"
@@ -195,15 +188,7 @@ export const Header: React.FC = observer(() => {
                         <span>个人资料</span>
                       </Link>
 
-                      <Link
-                        to={ROUTES.SETTINGS}
-                        className="flex items-center space-x-2 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors"
-                        onClick={() => setShowUserMenu(false)}
-                      >
-                        <Settings className="w-4 h-4" />
-                        <span>账户设置</span>
-                      </Link>
-
+                  
                       <hr className="border-gray-200 dark:border-gray-700 my-2" />
 
                       <button
@@ -266,8 +251,8 @@ export const Header: React.FC = observer(() => {
                   >
                     <IconComponent className="w-5 h-5" />
                     <span>{item.label}</span>
-                    {/* 在移动端AI智能体按钮右侧显示徽章 */}
-                    {item.path === "/ai-workflow" && (
+                    {/* 在移动端工作流按钮右侧显示徽章 */}
+                    {item.path === ROUTES.AI_WORKFLOW && (
                       <div className="ml-auto">
                         <Badge
                           icon="Sparkles"

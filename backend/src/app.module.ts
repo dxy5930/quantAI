@@ -7,11 +7,8 @@ import { ScheduleModule } from "@nestjs/schedule";
 
 import { AuthModule } from "./modules/auth/auth.module";
 import { UsersModule } from "./modules/users/users.module";
-import { StrategiesModule } from "./modules/strategies/strategies.module";
-import { BacktestModule } from "./modules/backtest/backtest.module";
 import { StocksModule } from "./modules/stocks/stocks.module";
 import { SystemModule } from "./modules/system/system.module";
-import { AIWorkflowModule } from "./modules/ai-workflow/ai-workflow.module";
 import { HomeModule } from "./modules/home/home.module";
 import { StickyNotesModule } from "./modules/sticky-notes/sticky-notes.module";
 import { SharedModule } from "./shared/shared.module";
@@ -80,11 +77,8 @@ import { CACHE_CONSTANTS, THROTTLE_CONSTANTS } from "./shared/constants";
     // 业务模块
     AuthModule,
     UsersModule,
-    StrategiesModule,
-    BacktestModule,
     StocksModule,
     SystemModule,
-    AIWorkflowModule,
     HomeModule,
     StickyNotesModule,
   ],
