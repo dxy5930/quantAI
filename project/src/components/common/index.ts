@@ -14,9 +14,7 @@ export { default as AIAnalysisLoader } from './AIAnalysisLoader';
 export { default as EmptyState } from './EmptyState';
 export { default as Modal } from './Modal';
 export { default as ConfirmModal } from './ConfirmModal';
-export { default as StickyNote } from './StickyNote';
-export { default as StickyNoteModal } from './StickyNoteModal';
-export { default as StickyNoteHistoryPopover } from './StickyNoteHistoryPopover';
+
 export { default as BackButton } from './BackButton';
 export { default as StickyNavigationBar } from './StickyNavigationBar';
 
@@ -42,3 +40,4 @@ export { EnhancedSearchFilter } from './EnhancedSearchFilter';
 export { MasonryGrid } from './MasonryGrid';
 export { LoadMoreIndicator } from './LoadMoreIndicator';
 export { ResizableSplitter } from './ResizableSplitter';
+export { ResizableDivider } from './ResizableDivider';

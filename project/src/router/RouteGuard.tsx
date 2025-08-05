@@ -18,8 +18,11 @@ export const RouteGuard: React.FC<RouteGuardProps> = observer(({ children }) => 
   // 如果还未初始化完成，显示加载状态
   if (!user.isInitialized) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="text-gray-600 dark:text-gray-400">正在加载...</p>
+        </div>
       </div>
     );
   }

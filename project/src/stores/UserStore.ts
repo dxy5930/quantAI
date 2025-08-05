@@ -66,9 +66,10 @@ export class UserStore {
    */
   private async initializeAuth() {
     try {
-      if (authService.isAuthenticated()) {
-        await this.loadCurrentUser();
-      }
+      // 暂时跳过后端认证检查
+      // if (authService.isAuthenticated()) {
+      //   await this.loadCurrentUser();
+      // }
     } catch (error) {
       console.error('初始化认证状态失败:', error);
     } finally {
@@ -113,28 +114,40 @@ export class UserStore {
   async login(credentials?: LoginCredentials) {
     const loginData = credentials || this.loginForm;
     
-    // 使用正确的字段名发送给后端
-    const apiLoginData = {
-      username: loginData.username,
-      password: loginData.password
-    };
-    
     runInAction(() => {
       this.isLoading = true;
       this.error = null;
     });
 
     try {
-      const response = await authService.login(apiLoginData);
+      // 暂时跳过后端验证，直接模拟登录成功
+      await new Promise(resolve => setTimeout(resolve, 500)); // 模拟网络延迟
+      
+      // 创建模拟用户数据
+      const mockUser = {
+        id: '1',
+        username: loginData.username || 'demo_user',
+        email: 'demo@example.com',
+        avatar: '',
+        role: 'user' as const,
+        level: 1,
+        createdAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString(),
+        profile: {
+          displayName: loginData.username || 'Demo User',
+          tradingExperience: 'intermediate' as const,
+          riskTolerance: 'medium' as const
+        }
+      };
       
       runInAction(() => {
-        this.currentUser = this.convertUserInfoToUser(response.user);
+        this.currentUser = mockUser;
         this.isAuthenticated = true;
         this.isLoading = false;
         this.clearLoginForm();
       });
 
-      return response;
+      return { user: mockUser, token: 'mock-token', refreshToken: 'mock-refresh-token' };
     } catch (error) {
       runInAction(() => {
         this.isLoading = false;

@@ -1,8 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
-import { StrategyChartData } from "../entities/strategy-chart-data.entity";
-import { Strategy } from "../entities/strategy.entity";
 import { ChartDataGenerator } from "../utils/chart-data-generator.util";
 import { STRATEGY_CONSTANTS } from "../constants";
 
@@ -13,10 +11,8 @@ import { STRATEGY_CONSTANTS } from "../constants";
 @Injectable()
 export class ChartDataService {
   constructor(
-    @InjectRepository(StrategyChartData)
-    private strategyChartDataRepository: Repository<StrategyChartData>,
-    @InjectRepository(Strategy)
-    private strategyRepository: Repository<Strategy>,
+    private strategyChartDataRepository: Repository<any>,
+    private strategyRepository: Repository<any>,
   ) {}
 
   /**
@@ -67,7 +63,7 @@ export class ChartDataService {
   /**
    * 获取策略图表数据
    */
-  async getStrategyChartData(strategyId: string, period: string = "1y"): Promise<StrategyChartData[]> {
+  async getStrategyChartData(strategyId: string, period: string = "1y"): Promise<any[]> {
     return this.strategyChartDataRepository.find({
       where: { strategyId, period },
       order: { dataDate: "ASC" },

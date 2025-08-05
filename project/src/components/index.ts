@@ -5,6 +5,7 @@ export * from './common';
 export { Layout } from './layout/Layout';
 export { Header } from './layout/Header';
 export { Footer } from './layout/Footer';
+export { Sidebar } from './layout/Sidebar';
 
 // 用户相关组件
 export { default as ChangePasswordModal } from './user/ChangePasswordModal';

@@ -116,40 +116,7 @@ export interface UnifiedApiResponse<T = any> {
   timestamp?: string;
 }
 
-// 便签接口
-export interface StickyNote {
-  id: string;
-  title: string;
-  content: string;
-  color: string;
-  position: { x: number; y: number };
-  size: { width: number; height: number };
-  zIndex: number;
-  isMinimized: boolean;
-  createdAt: string;
-  updatedAt: string;
-  userId: string;
-}
 
-// 创建便签DTO
-export interface CreateStickyNoteDto {
-  title: string;
-  content: string;
-  color?: string;
-  position?: { x: number; y: number };
-  size?: { width: number; height: number };
-}
-
-// 更新便签DTO
-export interface UpdateStickyNoteDto {
-  title?: string;
-  content?: string;
-  color?: string;
-  position?: { x: number; y: number };
-  size?: { width: number; height: number };
-  zIndex?: number;
-  isMinimized?: boolean;
-}
 
 // AI工作流相关接口
 export interface AIWorkflowNode {

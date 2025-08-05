@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { MessageSquare, DollarSign } from 'lucide-react';
+import { MessageSquare, DollarSign, Info } from 'lucide-react';
 import { Logo } from '../common/Logo';
 import { ROUTES } from '../../constants/routes';
 
@@ -22,6 +22,13 @@ export const Footer: React.FC = () => {
             >
               <DollarSign className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
               <span>定价方案</span>
+            </Link>
+            <Link
+              to={ROUTES.ABOUT}
+              className="flex items-center space-x-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-300 group"
+            >
+              <Info className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+              <span>关于我们</span>
             </Link>
             <Link
               to={ROUTES.FEEDBACK}

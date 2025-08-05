@@ -8,30 +8,34 @@ interface LogoProps {
   className?: string;
 }
 
-// 完整版logo - 使用FindValue.png图片
-const FullLogo: React.FC<{ size: string }> = ({ size }) => (
+// 使用React.memo优化图片组件，避免不必要的重新渲染
+const FullLogo = React.memo<{ size: string }>(({ size }) => (
   <img 
     src="/src/assets/FindValue.png" 
     alt="FindValue Logo" 
     className={`${size} object-contain`}
+    loading="lazy"
+    style={{ imageRendering: 'auto' }}
   />
-);
+));
 
-// 简化版logo - 也使用FindValue.png图片
-const SimpleLogo: React.FC<{ size: string }> = ({ size }) => (
+// 简化版logo - 也使用React.memo优化
+const SimpleLogo = React.memo<{ size: string }>(({ size }) => (
   <img 
     src="/src/assets/FindValue.png" 
     alt="FindValue Logo" 
     className={`${size} object-contain`}
+    loading="lazy"
+    style={{ imageRendering: 'auto' }}
   />
-);
+));
 
-export const Logo: React.FC<LogoProps> = ({ 
+export const Logo: React.FC<LogoProps> = React.memo(({ 
   variant = 'header', 
   showText = true, 
   className = '' 
 }) => {
-  const getSize = () => {
+  const getSize = React.useMemo(() => {
     switch (variant) {
       case 'auth':
         return 'w-16 h-16';
@@ -40,9 +44,9 @@ export const Logo: React.FC<LogoProps> = ({
       default:
         return 'w-12 h-12';
     }
-  };
+  }, [variant]);
 
-  const getTextSize = () => {
+  const getTextSize = React.useMemo(() => {
     switch (variant) {
       case 'auth':
         return 'text-2xl';
@@ -51,21 +55,21 @@ export const Logo: React.FC<LogoProps> = ({
       default:
         return 'text-xl';
     }
-  };
+  }, [variant]);
 
-  const LogoIcon = () => (
-    <div className={`${getSize()} group-hover:scale-105 transition-all duration-300 flex items-center justify-center relative`}>
+  const LogoIcon = React.useMemo(() => (
+    <div className={`${getSize} group-hover:scale-105 transition-all duration-300 flex items-center justify-center relative`}>
       {variant === 'auth' ? (
         <FullLogo size="w-full h-full" />
       ) : (
         <SimpleLogo size="w-full h-full" />
       )}
     </div>
-  );
+  ), [variant, getSize]);
 
-  const LogoText = () => showText && (
+  const LogoText = React.useMemo(() => showText && (
     <div className="flex flex-col">
-      <h1 className={`${getTextSize()} font-bold text-gray-900 dark:text-white group-hover:text-gradient transition-all duration-300`}>
+      <h1 className={`${getTextSize} font-bold text-gray-900 dark:text-white group-hover:text-gradient transition-all duration-300`}>
         FindValue
       </h1>
       {variant !== 'footer' && (
@@ -74,12 +78,16 @@ export const Logo: React.FC<LogoProps> = ({
         </p>
       )}
     </div>
-  );
+  ), [variant, showText, getTextSize]);
 
   return (
     <Link to={ROUTES.AI_WORKFLOW} className={`flex items-center space-x-3 group ${className}`}>
-      <LogoIcon />
-      <LogoText />
+      {LogoIcon}
+      {LogoText}
     </Link>
   );
-}; 
+});
+
+Logo.displayName = 'Logo';
+FullLogo.displayName = 'FullLogo';
+SimpleLogo.displayName = 'SimpleLogo'; 

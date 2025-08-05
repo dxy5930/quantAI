@@ -7,8 +7,6 @@ import {
   OneToMany,
 } from "typeorm";
 import { Exclude, Expose } from "class-transformer";
-import { Strategy } from "./strategy.entity";
-import { BacktestHistory } from "./backtest-history.entity";
 import { UserLevel, USER_LEVEL_PERMISSIONS } from "../types";
 import { USER_CONSTANTS } from "../constants";
 
@@ -150,7 +148,7 @@ export class User {
    * 一对多关系，一个用户可以创建多个策略
    */
   @OneToMany(() => Strategy, (strategy) => strategy.author)
-  strategies: Strategy[];
+  strategies: any[];
 
   /**
    * 用户的回测历史记录

@@ -3,14 +3,14 @@ import { createContext, useContext } from "react";
 import { AppStore } from "./AppStore";
 import { HomeStore } from "./HomeStore";
 import { UserStore } from "./UserStore";
-import { StickyNoteStore } from "./stickyNoteStore";
+
 
 // 全局可观察状态
 export class RootStore {
   appStore: AppStore;
   homeStore: HomeStore;
   userStore: UserStore;
-  stickyNoteStore: StickyNoteStore;
+
   fullLoading = false;
 
   constructor() {
@@ -18,7 +18,7 @@ export class RootStore {
     this.appStore = new AppStore();
     this.homeStore = new HomeStore();
     this.userStore = new UserStore();
-    this.stickyNoteStore = new StickyNoteStore();
+
     
     // 自动保存用户认证状态
     autorun(() => {
@@ -48,10 +48,9 @@ export { useStore, StoreContext, rootStore };
 export const appStore = rootStore.appStore;
 export const homeStore = rootStore.homeStore;
 export const userStore = rootStore.userStore;
-export const stickyNoteStore = rootStore.stickyNoteStore;
+
 
 // 导出store类
 export { AppStore } from "./AppStore";
 export { HomeStore } from "./HomeStore";
 export { UserStore } from "./UserStore";
-export { StickyNoteStore } from "./stickyNoteStore";

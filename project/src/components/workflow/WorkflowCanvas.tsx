@@ -43,6 +43,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
   const [isRunning, setIsRunning] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // 调试：显示当前workflowId
+  React.useEffect(() => {
+    console.log('WorkflowCanvas接收到的workflowId:', workflowId);
+  }, [workflowId]);
+
   // 模拟任务节点
   const taskNodes = [
     { 
@@ -68,48 +73,15 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
     }
   ];
 
-  // 模拟初始任务流消息
+  // 初始化对话消息
   useEffect(() => {
     if (workflowId) {
+      // 创建新任务时，只显示欢迎消息
       const initialMessages: TaskMessage[] = [
         {
-          id: '1',
+          id: 'welcome',
           type: 'system',
-          content: `已加载工作流: ${workflowId === '1' ? '股票分析工作流' : '工作流'} ${workflowId}`,
-          timestamp: new Date()
-        },
-        {
-          id: '2',
-          type: 'task',
-          content: '搜索相关网页资料...',
-          timestamp: new Date(),
-          status: 'completed'
-        },
-        {
-          id: '3',
-          type: 'task',
-          content: '分析股票数据库信息...',
-          timestamp: new Date(),
-          status: 'completed'
-        },
-        {
-          id: '4',
-          type: 'task',
-          content: '调用财经API接口获取实时数据...',
-          timestamp: new Date(),
-          status: 'completed'
-        },
-        {
-          id: '5',
-          type: 'task',
-          content: '生成分析图表和文件资源...',
-          timestamp: new Date(),
-          status: 'completed'
-        },
-        {
-          id: '6',
-          type: 'system',
-          content: '工作流已准备就绪，请输入指令开始执行任务',
+          content: '欢迎使用 FindValue AI 工作流！请输入您的任务需求，我将为您创建专属的工作流程。',
           timestamp: new Date()
         }
       ];
@@ -144,9 +116,29 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
       timestamp: new Date()
     };
 
+    // 检查是否是第一条用户消息（过滤掉系统消息）
+    const isFirstMessage = messages.filter(m => m.type === 'user').length === 0;
+    const messageContent = inputMessage;
+
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsRunning(true);
+
+    // 如果是第一条消息，生成并更新任务名称
+    if (isFirstMessage && workflowId) {
+      const taskTitle = generateTaskTitle(messageContent);
+      const taskDescription = generateTaskDescription(messageContent);
+      
+      console.log('更新任务:', { workflowId, taskTitle, taskDescription, isFirstMessage });
+      
+      // 更新侧边栏中的任务名称
+      if ((window as any).updateSidebarTask) {
+        (window as any).updateSidebarTask(workflowId, taskTitle, taskDescription);
+        console.log('已调用updateSidebarTask');
+      } else {
+        console.log('updateSidebarTask不存在');
+      }
+    }
 
     // 模拟AI处理和任务执行
     setTimeout(() => {
@@ -183,6 +175,33 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
         setIsRunning(false);
       }, 2000);
     }, 1000);
+  };
+
+  // 根据用户输入生成任务标题
+  const generateTaskTitle = (message: string): string => {
+    const keywords = message.toLowerCase();
+    
+    if (keywords.includes('股票') || keywords.includes('股价') || keywords.includes('投资')) {
+      return '股票分析任务';
+    } else if (keywords.includes('数据') || keywords.includes('分析')) {
+      return '数据分析任务';
+    } else if (keywords.includes('策略') || keywords.includes('交易')) {
+      return '投资策略任务';
+    } else if (keywords.includes('风险') || keywords.includes('评估')) {
+      return '风险评估任务';
+    } else if (keywords.includes('预测') || keywords.includes('趋势')) {
+      return '趋势预测任务';
+    } else {
+      return 'AI智能任务';
+    }
+  };
+
+  // 根据用户输入生成任务描述
+  const generateTaskDescription = (message: string): string => {
+    if (message.length > 50) {
+      return message.substring(0, 47) + '...';
+    }
+    return message;
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -240,36 +259,6 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
         return <XCircle className="w-5 h-5 text-red-600" />;
       default:
         return <AlertCircle className="w-5 h-5 text-gray-600" />;
-    }
-  };
-
-  const getNodeTypeIcon = (type: string) => {
-    switch (type) {
-      case 'browser':
-        return <Globe className="w-5 h-5 text-blue-600" />;
-      case 'database':
-        return <Database className="w-5 h-5 text-green-600" />;
-      case 'api':
-        return <Zap className="w-5 h-5 text-purple-600" />;
-      case 'file':
-        return <FileText className="w-5 h-5 text-orange-600" />;
-      default:
-        return <Bot className="w-5 h-5 text-gray-600" />;
-    }
-  };
-
-  const getNodeStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'border-green-500 bg-green-50 dark:bg-green-900/20';
-      case 'running':
-        return 'border-blue-500 bg-blue-50 dark:bg-blue-900/20';
-      case 'pending':
-        return 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20';
-      case 'failed':
-        return 'border-red-500 bg-red-50 dark:bg-red-900/20';
-      default:
-        return 'border-gray-300 bg-gray-50 dark:bg-gray-900/20';
     }
   };
 

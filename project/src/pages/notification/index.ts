@@ -1,1 +1,1 @@
-export { default as NotificationDetailPage } from './NotificationDetailPage'; 
+export { NotificationCenter as default } from './NotificationCenter'; 

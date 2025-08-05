@@ -17,9 +17,8 @@ const ChangePasswordPage = lazy(() => import('../pages/user/ChangePasswordPage')
 const AIWorkflowPage = lazy(() => import('../pages/ai-workflow'));
 const PricingPage = lazy(() => import('../pages/pricing'));
 const FeedbackPage = lazy(() => import('../pages/feedback'));
-const HelpPage = lazy(() => import('../pages/help'));
 const AboutPage = lazy(() => import('../pages/about'));
-const NotificationDetailPage = lazy(() => import('../pages/notification/NotificationDetailPage'));
+const NotificationCenter = lazy(() => import('../pages/notification'));
 
 // 错误页面组件
 const NotFoundPage = lazy(() => import('../pages/error/NotFoundPage'));
@@ -99,10 +98,6 @@ export const routes: RouteObject[] = [
         element: <AboutPage />
       },
       {
-        path: ROUTES.HELP,
-        element: <HelpPage />
-      },
-      {
         path: ROUTES.PRICING,
         element: <PricingPage />
       },
@@ -113,8 +108,8 @@ export const routes: RouteObject[] = [
       
       // 通知相关
       {
-        path: ROUTES.NOTIFICATION_DETAIL,
-        element: <RouteGuard><NotificationDetailPage /></RouteGuard>
+        path: ROUTES.NOTIFICATIONS,
+        element: <RouteGuard><NotificationCenter /></RouteGuard>
       }
     ]
   },

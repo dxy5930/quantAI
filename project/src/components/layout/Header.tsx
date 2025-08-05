@@ -1,13 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { observer } from "mobx-react-lite";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   User,
   Bell,
-  Settings,
-  DollarSign,
-  History,
-  User as UserIcon,
+
   LogOut,
   LogIn,
   Menu,
@@ -16,11 +13,11 @@ import {
 } from "lucide-react";
 import { ROUTES } from "../../constants/routes";
 import { useUserStore, useAppStore } from "../../hooks/useStore";
-import { NotificationModal } from "../common/NotificationModal";
+
 import { ThemeToggle } from "../common/ThemeToggle";
 import { Logo } from "../common/Logo";
 import { Badge } from "../common/Badge";
-import StickyNoteManager from "./StickyNoteManager";
+
 
 export const Header: React.FC = observer(() => {
   const location = useLocation();
@@ -30,7 +27,7 @@ export const Header: React.FC = observer(() => {
 
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [showNotificationModal, setShowNotificationModal] = useState(false);
+
 
   const navItems = [
     { path: ROUTES.AI_WORKFLOW, label: "工作流", icon: Bot, requiresAuth: true },
@@ -60,8 +57,13 @@ export const Header: React.FC = observer(() => {
     setShowMobileMenu(!showMobileMenu);
   };
 
-  const toggleNotificationModal = () => {
-    setShowNotificationModal(!showNotificationModal);
+  const handleNotificationClick = () => {
+    // 检查是否已经在通知中心页面
+    if (location.pathname === ROUTES.NOTIFICATIONS) {
+      // 如果已经在通知中心页面，直接返回，不进行导航
+      return;
+    }
+    navigate(ROUTES.NOTIFICATIONS);
   };
 
   return (
@@ -120,12 +122,11 @@ export const Header: React.FC = observer(() => {
             {/* 主题切换按钮 */}
             <ThemeToggle />
 
-            {/* 笔记管理组件 - 只有登录用户才能看到 */}
-            {userStore.isLoggedIn && <StickyNoteManager />}
+
 
             {/* 通知按钮 */}
             <button
-              onClick={toggleNotificationModal}
+              onClick={handleNotificationClick}
               className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
             >
               <Bell className="w-5 h-5" />
@@ -205,7 +206,7 @@ export const Header: React.FC = observer(() => {
             ) : (
               <button
                 onClick={handleLogin}
-                className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 px-4 py-2 rounded-lg text-white text-sm font-medium transition-all duration-300 shadow-sm hover:shadow-glow"
+                className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 px-4 py-2 rounded-lg text-white text-sm font-medium  shadow-sm hover:shadow-glow"
               >
                 <LogIn className="w-4 h-4" />
                 <span className="hidden sm:block">登录</span>
@@ -283,11 +284,7 @@ export const Header: React.FC = observer(() => {
         />
       )}
 
-      {/* 通知模态框 */}
-      <NotificationModal
-        isOpen={showNotificationModal}
-        onClose={() => setShowNotificationModal(false)}
-      />
+
 
 
     </header>

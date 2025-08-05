@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { observer } from 'mobx-react-lite';
-import { WorkflowList } from './WorkflowList';
+import { useOutletContext } from 'react-router-dom';
 import { WorkflowCanvas } from './WorkflowCanvas';
 import { WorkspacePanel } from './WorkspacePanel';
+import { ResizableDivider } from '../common/ResizableDivider';
+import { useResizable } from '../../hooks/useResizable';
 import { WorkflowNode, NodeResource } from '../../types/workflow-types';
 import { TaskContext, AgentStatus } from './types';
 
@@ -10,19 +12,34 @@ interface WorkflowLayoutProps {
   className?: string;
 }
 
+interface OutletContext {
+  selectedWorkflowId: string | null;
+  onWorkflowSelect: (workflowId: string) => void;
+}
+
 export const WorkflowLayout: React.FC<WorkflowLayoutProps> = observer(({ className = '' }) => {
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
+  const { selectedWorkflowId } = useOutletContext<OutletContext>();
   const [taskContext, setTaskContext] = useState<TaskContext | undefined>(undefined);
   const [agentStatus, setAgentStatus] = useState<AgentStatus | undefined>(undefined);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [nodeResource, setNodeResource] = useState<NodeResource | null>(null);
   const [targetTab, setTargetTab] = useState<string | null>(null);
+  
+  // 使用useResizable Hook替换原有的分隔条逻辑
+  const {
+    width: rightPanelWidth,
+    isResizing,
+    containerRef,
+    handleMouseDown
+  } = useResizable({
+    initialWidth: 320,
+    minWidth: 280,
+    maxWidth: undefined // 将在组件内部计算
+  });
 
-  const handleWorkflowSelect = (workflowId: string) => {
-    setSelectedWorkflowId(workflowId);
-    
-    // 模拟任务上下文变化 - 实际项目中这里会根据真实的任务执行情况更新
-    if (workflowId === '1') {
+  // 当选择的工作流改变时更新任务上下文
+  useEffect(() => {
+    if (selectedWorkflowId === '1') {
       setTaskContext({
         taskType: 'stock-analysis',
         // 网页资源 - browser tab数据
@@ -190,7 +207,7 @@ export const WorkflowLayout: React.FC<WorkflowLayoutProps> = observer(({ classNa
       setTaskContext(undefined);
       setAgentStatus(undefined);
     }
-  };
+  }, [selectedWorkflowId]);
 
   // 模拟实时更新Agent状态
   useEffect(() => {
@@ -223,8 +240,6 @@ export const WorkflowLayout: React.FC<WorkflowLayoutProps> = observer(({ classNa
 
     return () => clearInterval(interval);
   }, [agentStatus?.isRunning]);
-
-
 
   // 节点点击处理
   const handleNodeClick = (nodeId: string, nodeType: string) => {
@@ -347,17 +362,16 @@ export const WorkflowLayout: React.FC<WorkflowLayoutProps> = observer(({ classNa
   const shouldShowRightPanel = selectedNodeId || (agentStatus && agentStatus.isRunning) || taskContext;
 
   return (
-    <div className={`h-full flex bg-gray-50 dark:bg-slate-900 p-4 ${className}`}>
-      {/* 左侧工作流列表 - 固定在左侧 */}
-      <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 w-64 flex-shrink-0 h-full overflow-hidden rounded-xl shadow-sm">
-        <WorkflowList 
-          selectedWorkflowId={selectedWorkflowId}
-          onWorkflowSelect={handleWorkflowSelect}
-        />
-      </div>
-
+    <div ref={containerRef} className={`h-full flex bg-gray-50 dark:bg-slate-900 p-4 ${className}`}>
       {/* 中间画布区域 */}
-      <div className="flex flex-col min-w-0 flex-1 h-full mx-4">
+      <div 
+        className="flex flex-col min-w-0 h-full transition-all duration-300 ease-in-out"
+        style={{
+          width: shouldShowRightPanel 
+            ? `calc(100% - ${rightPanelWidth}px - 8px)` 
+            : '100%'
+        }}
+      >
         <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 h-full rounded-xl shadow-sm overflow-hidden">
           <WorkflowCanvas 
             workflowId={selectedWorkflowId}
@@ -367,16 +381,31 @@ export const WorkflowLayout: React.FC<WorkflowLayoutProps> = observer(({ classNa
         </div>
       </div>
 
-      {/* 右侧工作空间 - 动态显示 */}
+      {/* 可调整大小的分隔条 - 仅在有右侧面板时显示 */}
+      {shouldShowRightPanel && (
+        <ResizableDivider
+          onMouseDown={handleMouseDown}
+          isResizing={isResizing}
+          orientation="vertical"
+        />
+      )}
+
+      {/* 右侧工作空间 - 从右到左拉开动画 */}
       <div 
-        className={`bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 flex-shrink-0 transition-all duration-500 ease-in-out rounded-xl shadow-sm overflow-hidden ${
-          shouldShowRightPanel ? 'w-80 opacity-100' : 'w-0 opacity-0'
-        }`}
+        className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 flex-shrink-0 transition-all duration-300 ease-in-out rounded-xl shadow-sm overflow-hidden"
         style={{
-          minWidth: shouldShowRightPanel ? '320px' : '0px'
+          width: shouldShowRightPanel ? `${rightPanelWidth}px` : '0px',
+          transform: shouldShowRightPanel ? 'translateX(0)' : `translateX(${rightPanelWidth}px)`,
+          opacity: shouldShowRightPanel ? 1 : 0
         }}
       >
-        <div className={`${shouldShowRightPanel ? 'block' : 'hidden'} h-full transition-all duration-500`}>
+        <div 
+          className="h-full"
+          style={{
+            width: `${rightPanelWidth}px`,
+            minWidth: '280px'
+          }}
+        >
           <WorkspacePanel 
             selectedWorkflowId={selectedWorkflowId}
             taskContext={taskContext}

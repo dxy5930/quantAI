@@ -12,3 +12,4 @@ export { useStrategyActions } from "./useStrategyActions";
 export { useAsyncAction } from "./useAsyncAction";
 export { useSearchFilter } from "./useSearchFilter";
 export { useShare } from "./useShare";
+export { useResizable } from "./useResizable";

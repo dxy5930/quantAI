@@ -5,5 +5,5 @@ export * from './navigationUtils';
 export * from './scrollToTop';
 export * from './shareUtils';
 export * from './analysisHelpers';
-export * from './stickyNoteColors';
+
 export * from './scrollbarStyles'; 
