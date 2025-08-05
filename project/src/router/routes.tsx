@@ -8,10 +8,10 @@ import { WorkflowPageLayout } from './layouts/WorkflowLayout';
 import { RouteGuard } from './RouteGuard';
 
 // 懒加载页面组件
-const LoginPage = lazy(() => import('../pages/auth/LoginPage'));
-const RegisterPage = lazy(() => import('../pages/auth/RegisterPage'));
-const ForgotPasswordPage = lazy(() => import('../pages/auth/ForgotPasswordPage'));
-const ResetPasswordPage = lazy(() => import('../pages/auth/ResetPasswordPage'));
+const LoginPage = lazy(() => import('../pages/auth/Login'));
+const RegisterPage = lazy(() => import('../pages/auth/Register'));
+const ForgotPasswordPage = lazy(() => import('../pages/auth/ForgotPassword'));
+const ResetPasswordPage = lazy(() => import('../pages/auth/ResetPassword'));
 const ProfilePage = lazy(() => import('../pages/user/ProfilePage'));
 const ChangePasswordPage = lazy(() => import('../pages/user/ChangePasswordPage'));
 const AIWorkflowPage = lazy(() => import('../pages/ai-workflow'));

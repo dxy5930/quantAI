@@ -113,6 +113,14 @@ const ForgotPasswordPage: React.FC = () => {
               </div>
             </div>
 
+            {/* 错误提示 - 移除内联错误显示 */}
+            {/* {error && (
+              <div className="flex items-center space-x-2 text-red-200 bg-red-500/20 border border-red-400/30 rounded-lg p-3 backdrop-blur-sm">
+                <AlertCircle className="h-5 w-5 flex-shrink-0" />
+                <span className="text-sm">{error}</span>
+              </div>
+            )} */}
+
             {/* 发送按钮 */}
             <button
               type="submit"
@@ -146,4 +154,4 @@ const ForgotPasswordPage: React.FC = () => {
   );
 };
 
-export default ForgotPasswordPage;
+export default ForgotPasswordPage; 

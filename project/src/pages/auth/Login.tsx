@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { observer } from 'mobx-react-lite';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Lock, User, LogIn, AlertCircle } from 'lucide-react';
@@ -6,23 +6,6 @@ import { ROUTES } from '../../constants/routes';
 import { useUserStore, useAppStore } from '../../hooks/useStore';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { Logo } from '../../components/common/Logo';
-
-// 创建独立的头部组件，避免因表单状态变化而重新渲染
-const LoginHeader = React.memo(() => (
-  <div className="text-center mb-8">
-    <div className="flex justify-center mb-4">
-      <Logo variant="auth" showText={false} />
-    </div>
-    <h2 className="text-3xl font-bold text-white">
-      Welcome!
-    </h2>
-    <p className="mt-2 text-gray-200">
-      登录您的策略回测账户
-    </p>
-  </div>
-));
-
-LoginHeader.displayName = 'LoginHeader';
 
 const LoginPage: React.FC = observer(() => {
   const userStore = useUserStore();
@@ -48,13 +31,13 @@ const LoginPage: React.FC = observer(() => {
     return ROUTES.HOME;
   };
 
-  const handleInputChange = useCallback((field: 'username' | 'password', value: string) => {
+  const handleInputChange = (field: 'username' | 'password', value: string) => {
     userStore.setLoginForm({ [field]: value });
     // 清除错误信息
     if (userStore.error) {
       userStore.clearError();
     }
-  }, [userStore]);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,7 +146,17 @@ const LoginPage: React.FC = observer(() => {
         {/* 表单背景 */}
         <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-white/20">
           {/* 头部 */}
-          <LoginHeader />
+          <div className="text-center mb-8">
+            <div className="flex justify-center mb-4">
+              <Logo variant="auth" showText={false} />
+            </div>
+            <h2 className="text-3xl font-bold text-white">
+              Welcome!
+            </h2>
+            <p className="mt-2 text-gray-200">
+              登录您的策略回测账户
+            </p>
+          </div>
 
           {/* 登录表单 */}
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -222,6 +215,14 @@ const LoginPage: React.FC = observer(() => {
                 </div>
               </div>
             </div>
+
+            {/* 错误提示 - 移除内联错误显示 */}
+            {/* {userStore.error && (
+              <div className="flex items-center space-x-2 text-red-200 bg-red-500/20 border border-red-400/30 rounded-lg p-3 backdrop-blur-sm">
+                <AlertCircle className="h-5 w-5 flex-shrink-0" />
+                <span className="text-sm">{userStore.error}</span>
+              </div>
+            )} */}
 
             {/* 记住我和忘记密码 */}
             <div className="flex items-center justify-between">

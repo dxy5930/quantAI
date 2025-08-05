@@ -9,8 +9,10 @@ src/pages/
 ├── home/                    # 首页
 │   └── index.tsx           # 首页组件
 ├── auth/                    # 认证相关页面
-│   ├── LoginPage.tsx       # 登录页面
-│   ├── RegisterPage.tsx    # 注册页面
+│   ├── Login.tsx           # 登录页面
+│   ├── Register.tsx        # 注册页面
+│   ├── ForgotPassword.tsx  # 忘记密码页面
+│   ├── ResetPassword.tsx   # 重置密码页面
 │   └── index.ts            # 统一导出
 ├── strategy/                # 策略相关页面
 │   ├── StrategyConfigPage.tsx  # 策略配置页面

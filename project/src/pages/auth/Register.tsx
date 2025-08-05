@@ -185,6 +185,21 @@ const RegisterPage: React.FC = observer(() => {
                     </div>
                   )}
                 </div>
+                {/* 用户名要求提示 */}
+                {userStore.registerForm.username.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    <div className={`text-xs flex items-center space-x-2 ${
+                      isUsernameValid ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {isUsernameValid ? (
+                        <Check className="h-3 w-3" />
+                      ) : (
+                        <AlertCircle className="h-3 w-3" />
+                      )}
+                      <span>至少3个字符 ({userStore.registerForm.username.length}/3)</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 邮箱输入 */}
@@ -221,6 +236,15 @@ const RegisterPage: React.FC = observer(() => {
                     </div>
                   )}
                 </div>
+                {/* 邮箱格式提示 */}
+                {userStore.registerForm.email.length > 0 && !isEmailValid && (
+                  <div className="mt-2 space-y-1">
+                    <div className="text-xs flex items-center space-x-2 text-red-400">
+                      <AlertCircle className="h-3 w-3" />
+                      <span>请输入有效的邮箱格式（如：example@domain.com）</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 密码输入 */}
@@ -271,6 +295,21 @@ const RegisterPage: React.FC = observer(() => {
                     </button>
                   </div>
                 </div>
+                {/* 密码要求提示 */}
+                {userStore.registerForm.password.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    <div className={`text-xs flex items-center space-x-2 ${
+                      isPasswordValid ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {isPasswordValid ? (
+                        <Check className="h-3 w-3" />
+                      ) : (
+                        <AlertCircle className="h-3 w-3" />
+                      )}
+                      <span>至少8个字符 ({userStore.registerForm.password.length}/8)</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 确认密码输入 */}
@@ -321,8 +360,31 @@ const RegisterPage: React.FC = observer(() => {
                     </button>
                   </div>
                 </div>
+                {/* 密码匹配提示 */}
+                {userStore.registerForm.confirmPassword.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    <div className={`text-xs flex items-center space-x-2 ${
+                      isPasswordMatch ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {isPasswordMatch ? (
+                        <Check className="h-3 w-3" />
+                      ) : (
+                        <AlertCircle className="h-3 w-3" />
+                      )}
+                      <span>{isPasswordMatch ? '密码匹配' : '密码不匹配'}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
+
+            {/* 错误提示 - 移除内联错误显示 */}
+            {/* {userStore.error && (
+              <div className="flex items-center space-x-2 text-red-200 bg-red-500/20 border border-red-400/30 rounded-lg p-3 backdrop-blur-sm">
+                <AlertCircle className="h-5 w-5 flex-shrink-0" />
+                <span className="text-sm">{userStore.error}</span>
+              </div>
+            )} */}
 
             {/* 用户协议 */}
             <div className="flex items-center">
@@ -345,6 +407,35 @@ const RegisterPage: React.FC = observer(() => {
                 </button>
               </label>
             </div>
+
+            {/* 表单验证提示 */}
+            {!isFormValid && (
+              <div className="bg-yellow-500/20 border border-yellow-400/30 rounded-lg p-3 backdrop-blur-sm">
+                <div className="flex items-start space-x-2">
+                  <AlertCircle className="h-4 w-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-yellow-200">
+                    <p className="font-medium mb-1">请完成以下步骤：</p>
+                    <ul className="space-y-1 text-xs">
+                      {!isUsernameValid && (
+                        <li>• 用户名至少需要3个字符</li>
+                      )}
+                      {!isEmailValid && (
+                        <li>• 请输入有效的邮箱地址</li>
+                      )}
+                      {!isPasswordValid && (
+                        <li>• 密码至少需要8个字符</li>
+                      )}
+                      {!isPasswordMatch && userStore.registerForm.confirmPassword.length > 0 && (
+                        <li>• 两次输入的密码不一致</li>
+                      )}
+                      {!acceptTerms && (
+                        <li>• 请阅读并同意用户协议</li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* 注册按钮 */}
             <button
@@ -406,4 +497,4 @@ const RegisterPage: React.FC = observer(() => {
   );
 });
 
-export default RegisterPage;
+export default RegisterPage; 
