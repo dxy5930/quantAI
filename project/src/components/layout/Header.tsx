@@ -10,6 +10,7 @@ import {
   Menu,
   X,
   Bot,
+  FileText,
 } from "lucide-react";
 import { ROUTES } from "../../constants/routes";
 import { useUserStore, useAppStore } from "../../hooks/useStore";
@@ -31,6 +32,7 @@ export const Header: React.FC = observer(() => {
 
   const navItems = [
     { path: ROUTES.AI_WORKFLOW, label: "工作流", icon: Bot, requiresAuth: true },
+    { path: ROUTES.REVIEW, label: "复盘", icon: FileText, requiresAuth: true },
     // 定价功能已移至意见反馈页面
   ];
 

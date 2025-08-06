@@ -15,6 +15,7 @@ const ResetPasswordPage = lazy(() => import('../pages/auth/ResetPassword'));
 const ProfilePage = lazy(() => import('../pages/user/ProfilePage'));
 const ChangePasswordPage = lazy(() => import('../pages/user/ChangePasswordPage'));
 const AIWorkflowPage = lazy(() => import('../pages/ai-workflow'));
+const ReviewPage = lazy(() => import('../pages/review/ReviewPage'));
 const PricingPage = lazy(() => import('../pages/pricing'));
 const FeedbackPage = lazy(() => import('../pages/feedback'));
 const AboutPage = lazy(() => import('../pages/about'));
@@ -90,6 +91,11 @@ export const routes: RouteObject[] = [
         element: <RouteGuard><ChangePasswordPage /></RouteGuard>
       },
       
+      // 复盘页面
+      {
+        path: ROUTES.REVIEW,
+        element: <RouteGuard><ReviewPage /></RouteGuard>
+      },
 
       
       // 其他页面
@@ -125,6 +131,8 @@ export const routes: RouteObject[] = [
       }
     ]
   },
+
+
 
   // 错误页面路由（使用最小布局）
   {

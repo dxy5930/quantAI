@@ -14,6 +14,9 @@ export const ROUTES = {
   // AI工作流
   AI_WORKFLOW: '/ai-workflow',
   
+  // 复盘功能
+  REVIEW: '/review',
+  
   // 其他页面
   ABOUT: '/about',
   HELP: '/help',
@@ -85,6 +88,13 @@ export const PAGE_METADATA = {
     path: ROUTES.AI_WORKFLOW,
     title: 'AI工作流',
     description: 'AI工作流编辑器',
+    requiresAuth: true,
+    layout: 'default',
+  },
+  [ROUTES.REVIEW]: {
+    path: ROUTES.REVIEW,
+    title: '复盘',
+    description: '交易复盘分析页面',
     requiresAuth: true,
     layout: 'default',
   },

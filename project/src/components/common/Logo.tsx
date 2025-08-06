@@ -81,7 +81,7 @@ export const Logo: React.FC<LogoProps> = React.memo(({
   ), [variant, showText, getTextSize]);
 
   return (
-    <Link to={ROUTES.AI_WORKFLOW} className={`flex items-center space-x-3 group ${className}`}>
+    <Link to={ROUTES.HOME} className={`flex items-center space-x-3 group ${className}`}>
       {LogoIcon}
       {LogoText}
     </Link>
