@@ -12,6 +12,7 @@ python main.py
 """
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 import uvicorn
 import logging
@@ -20,7 +21,7 @@ from config import config
 from api.smart_stock_api import router as smart_stock_router
 from api.stock_recommendation_api import router as stock_recommendation_router
 from api.stock_array_analysis_api import router as stock_array_analysis_router
-from api.backtest_api import router as backtest_router
+# from api.backtest_api import router as backtest_router  # 暂时注释，文件不存在
 from api.ai_workflow_api import router as ai_workflow_router
 from api.home_api import router as home_router
 
@@ -40,11 +41,33 @@ app = FastAPI(
     description="基于AI的智能股票推荐分析服务，使用通义千问AI进行关键词分析，结合MySQL数据库推荐相关股票"
 )
 
+# 添加CORS中间件
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173", 
+        "http://localhost:5174", 
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:3000"
+    ],  # 允许的前端域名
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 添加并发处理中间件
+@app.middleware("http")
+async def add_process_time_header(request, call_next):
+    response = await call_next(request)
+    return response
+
 # 注册路由
 app.include_router(smart_stock_router)
 app.include_router(stock_recommendation_router)
 app.include_router(stock_array_analysis_router)
-app.include_router(backtest_router)
+# app.include_router(backtest_router)  # 暂时注释，文件不存在
 app.include_router(ai_workflow_router)
 app.include_router(home_router)
 
@@ -88,5 +111,8 @@ if __name__ == "__main__":
         timeout_keep_alive=config.API_REQUEST_TIMEOUT,
         timeout_graceful_shutdown=30,
         workers=1 if is_windows else None,  # Windows 上强制使用单进程
-        loop="asyncio"  # 明确指定事件循环类型
+        loop="asyncio",  # 明确指定事件循环类型
+        limit_concurrency=1000,  # 增加并发限制
+        limit_max_requests=10000,  # 增加最大请求数
+        backlog=2048  # 增加连接队列大小
     )

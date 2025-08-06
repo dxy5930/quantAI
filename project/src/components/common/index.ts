@@ -17,6 +17,7 @@ export { default as ConfirmModal } from './ConfirmModal';
 
 export { default as BackButton } from './BackButton';
 export { default as StickyNavigationBar } from './StickyNavigationBar';
+export { default as PythonApiStatus } from './PythonApiStatus';
 
 // 多个导出的组件文件
 export { ErrorMessage, SimpleError, NetworkError } from './ErrorMessage';

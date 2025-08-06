@@ -1,14 +1,14 @@
 import React, { useState, useRef } from "react";
 import { observer } from "mobx-react-lite";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import {
+import { 
   Bot,
   Workflow,
   User,
   Settings,
   LogOut,
-  ChevronDown,
-  ChevronRight,
+  ChevronDown, 
+  ChevronRight, 
   Home,
   Plus,
   PlayCircle,
@@ -16,11 +16,16 @@ import {
   Delete,
   Trash,
   Bell,
+  MessageCircle, 
+  Clock,
+  CheckCircle,
+  AlertCircle,
 } from "lucide-react";
 import { Logo } from "../common/Logo";
 import { useUserStore, useAppStore } from "../../hooks/useStore";
 import { ROUTES } from "../../constants/routes";
 import { useTaskContext } from "../../router/layouts/WorkflowLayout";
+import { pythonApiClient } from '../../services/pythonApiClient';
 
 
 interface SidebarProps {
@@ -96,6 +101,16 @@ export const Sidebar: React.FC<SidebarProps> = observer(
     };
 
     const handleTaskClick = (taskId: string) => {
+      // 切换任务前，清理当前的流式连接
+      try {
+        if (pythonApiClient.getActiveConnectionCount() > 0) {
+          console.log('切换任务，清理活跃连接');
+          pythonApiClient.closeAllConnections();
+        }
+      } catch (error) {
+        console.error('切换任务时清理连接失败:', error);
+      }
+      
       if (onWorkflowSelect) {
         onWorkflowSelect(taskId);
       }
@@ -103,6 +118,16 @@ export const Sidebar: React.FC<SidebarProps> = observer(
 
     // 新建工作流处理函数
     const handleCreateNewWorkflow = () => {
+      // 新建工作流前，清理当前的流式连接
+      try {
+        if (pythonApiClient.getActiveConnectionCount() > 0) {
+          console.log('新建工作流，清理活跃连接');
+          pythonApiClient.closeAllConnections();
+        }
+      } catch (error) {
+        console.error('新建工作流时清理连接失败:', error);
+      }
+      
       const newTaskId = `task_${Date.now()}`;
       const newTask: TaskItem = {
         id: newTaskId,

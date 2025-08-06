@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Dict, List, Optional, Any
 import asyncio
@@ -7,6 +8,9 @@ from datetime import datetime
 import json
 import logging
 
+# 初始化logger
+logger = logging.getLogger(__name__)
+
 from services.qwen_analyzer import QwenAnalyzer
 from services.stock_recommender import StockRecommender
 from services.smart_stock_service import SmartStockService
@@ -14,6 +18,162 @@ from services.database_service import DatabaseService
 from utils.helpers import clean_text
 
 router = APIRouter(prefix="/api/v1", tags=["AI Workflow"])
+
+def determine_resource_type_from_content(step_content: str, context: Dict[str, Any] = None) -> tuple[str, list]:
+    """
+    根据步骤内容和上下文智能判断resourceType和results
+    现在所有步骤都是"正在思考..."，所以根据步骤顺序和用户消息内容来判断
+    """
+    # 获取步骤序号和用户消息
+    step_number = context.get('step_number', 1) if context else 1
+    user_message = context.get('user_message', '') if context else ''
+    user_message_lower = user_message.lower()
+    
+    results = []
+    
+    # 根据步骤顺序和用户消息内容智能判断
+    if step_number == 1:
+        # 第一步：理解问题，通用操作
+        resource_type = 'general'
+        results = ["理解用户需求", "分析问题类型", "确定分析方向"]
+    elif step_number == 2:
+        # 第二步：根据用户问题判断是否需要数据查询
+        if any(keyword in user_message_lower for keyword in [
+            '股票', '代码', '数据', '行情', '价格', '财务', '分析', '000', '300', '600'
+        ]):
+            resource_type = 'database'
+            results = ["查询股票基础信息", "获取市场行情数据", "检索历史数据"]
+        else:
+            resource_type = 'browser'
+            results = ["搜索相关资料", "获取最新信息", "整理网络资源"]
+    elif step_number == 3:
+        # 第三步：AI分析处理
+        resource_type = 'api'
+        results = ["调用AI分析引擎", "获取智能推荐", "处理分析结果"]
+    elif step_number == 4:
+        # 第四步：整理结果
+        resource_type = 'general'
+        results = ["整合分析数据", "生成图表", "组织分析内容"]
+    else:
+        # 最后步骤：生成报告
+        resource_type = 'general'
+        results = ["制定投资建议", "评估风险", "生成最终报告"]
+    
+    return resource_type, results
+
+def determine_step_category_from_message(message: str) -> str:
+    """
+    根据用户消息智能判断步骤类别
+    """
+    message_lower = message.lower()
+    
+    if any(keyword in message_lower for keyword in [
+        '分析', '研究', '数据', '指标', '技术面', '基本面'
+    ]):
+        return 'analysis'
+    elif any(keyword in message_lower for keyword in [
+        '策略', '建议', '配置', '投资', '组合', '方案'
+    ]):
+        return 'strategy'
+    else:
+        return 'general'
+
+def generate_task_title_and_description(message: str) -> tuple[str, str]:
+    """
+    根据用户消息智能生成任务标题和描述
+    """
+    message_lower = message.lower()
+    
+    # 提取关键信息
+    symbols = []
+    sectors = []
+    strategies = []
+    
+    # 提取股票代码
+    import re
+    stock_pattern = r'[0-9]{6}|[A-Z]{2,5}'
+    potential_symbols = re.findall(stock_pattern, message.upper())
+    symbols.extend(potential_symbols[:3])  # 最多取3个
+    
+    # 识别行业板块
+    sector_keywords = {
+        '科技': ['科技', '技术', '互联网', '软件', '芯片', 'AI', '人工智能'],
+        '医药': ['医药', '医疗', '生物', '制药', '健康'],
+        '金融': ['银行', '保险', '证券', '金融', '券商'],
+        '新能源': ['新能源', '电动车', '光伏', '风电', '锂电池', '充电桩'],
+        '消费': ['消费', '零售', '食品', '饮料', '白酒', '家电'],
+        '房地产': ['房地产', '地产', '房产', '物业'],
+        '制造业': ['制造', '机械', '钢铁', '化工', '建材']
+    }
+    
+    for sector, keywords in sector_keywords.items():
+        if any(keyword in message_lower for keyword in keywords):
+            sectors.append(sector)
+    
+    # 识别投资策略类型
+    if any(keyword in message_lower for keyword in ['价值', '低估值', '分红', '蓝筹']):
+        strategies.append('价值投资')
+    if any(keyword in message_lower for keyword in ['成长', '高成长', '增长']):
+        strategies.append('成长投资')
+    if any(keyword in message_lower for keyword in ['量化', '技术分析', '指标']):
+        strategies.append('量化分析')
+    if any(keyword in message_lower for keyword in ['短线', '波段']):
+        strategies.append('短期交易')
+    if any(keyword in message_lower for keyword in ['长期', '长线']):
+        strategies.append('长期投资')
+    
+    # 生成标题
+    title_parts = []
+    
+    if symbols:
+        title_parts.append(f"{symbols[0]}等股票")
+    elif sectors:
+        title_parts.append(f"{sectors[0]}板块")
+    
+    if any(keyword in message_lower for keyword in ['分析', '研究', '数据', '指标']):
+        if title_parts:
+            title = f"{title_parts[0]}深度分析"
+        else:
+            title = "市场分析任务"
+    elif any(keyword in message_lower for keyword in ['策略', '建议', '配置', '投资', '组合']):
+        if strategies:
+            title = f"{strategies[0]}策略制定"
+        elif title_parts:
+            title = f"{title_parts[0]}投资策略"
+        else:
+            title = "投资策略制定"
+    elif any(keyword in message_lower for keyword in ['推荐', '选择', '筛选']):
+        if sectors:
+            title = f"{sectors[0]}股票推荐"
+        else:
+            title = "股票推荐任务"
+    elif any(keyword in message_lower for keyword in ['风险', '评估']):
+        title = "风险评估分析"
+    elif any(keyword in message_lower for keyword in ['预测', '趋势', '走势']):
+        if title_parts:
+            title = f"{title_parts[0]}趋势预测"
+        else:
+            title = "市场趋势预测"
+    else:
+        title = "AI投资咨询"
+    
+    # 生成描述（取用户消息的关键部分，最多50字符）
+    description = message.strip()
+    if len(description) > 50:
+        description = description[:47] + "..."
+    
+    # 如果消息太短，生成更详细的描述
+    if len(description) < 10:
+        if symbols:
+            description = f"分析{', '.join(symbols[:2])}等股票的投资价值"
+        elif sectors:
+            description = f"研究{', '.join(sectors[:2])}等行业的投资机会"
+        elif strategies:
+            description = f"制定{strategies[0]}相关的投资方案"
+        else:
+            description = "基于AI的智能投资分析与建议"
+    
+    return title, description
 
 # 请求模型
 class WorkflowStartRequest(BaseModel):
@@ -191,6 +351,89 @@ async def analyze_chat_message(request: ChatMessageRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI分析失败: {str(e)}")
+
+@router.get("/chat/stream")
+async def stream_chat_message(
+    message: str,
+    conversation_id: str = None,
+    context: str = "{}"
+):
+    """流式对话接口 - 分段式输出AI回复"""
+    try:
+        # 解析参数
+        conversation_id = conversation_id or f"conv_{uuid.uuid4()}"
+        try:
+            context_dict = json.loads(context) if context else {}
+        except:
+            context_dict = {}
+        
+        # 初始化对话历史
+        if conversation_id not in conversation_storage:
+            conversation_storage[conversation_id] = []
+        
+        # 添加用户消息
+        user_message = {
+            "id": f"msg_{uuid.uuid4()}",
+            "type": "user",
+            "content": message,
+            "timestamp": datetime.now().isoformat()
+        }
+        conversation_storage[conversation_id].append(user_message)
+        
+        # 创建AI消息ID
+        ai_message_id = f"msg_{uuid.uuid4()}"
+        
+        async def generate_streaming_response():
+            """生成流式响应"""
+            try:
+                # 1. 发送开始信号
+                yield f"data: {json.dumps({'type': 'start', 'messageId': ai_message_id, 'conversationId': conversation_id})}\n\n"
+                await asyncio.sleep(0.1)
+                
+                # 1.5. 生成并发送任务信息
+                task_title, task_description = generate_task_title_and_description(message)
+                yield f"data: {json.dumps({'type': 'task_info', 'taskTitle': task_title, 'taskDescription': task_description, 'messageId': ai_message_id})}\n\n"
+                await asyncio.sleep(0.2)
+                
+                # 2. 判断消息类型并生成相应的分段响应
+                message_lower = message.lower()
+                context = context_dict
+                
+                if any(keyword in message_lower for keyword in ['分析', '股票', '投资', '市场']):
+                    # 股票分析相关的分段响应
+                    async for chunk in generate_analysis_stream(message, context):
+                        yield chunk
+                elif any(keyword in message_lower for keyword in ['策略', '建议', '推荐']):
+                    # 策略建议相关的分段响应
+                    async for chunk in generate_strategy_stream(message, context):
+                        yield chunk
+                else:
+                    # 通用对话的分段响应
+                    async for chunk in generate_general_stream(message, context):
+                        yield chunk
+                
+                # 3. 发送完成信号
+                yield f"data: {json.dumps({'type': 'complete', 'messageId': ai_message_id})}\n\n"
+                
+                # 4. 保存完整消息到历史记录
+                # 这里可以根据需要保存完整的AI回复
+                
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+        
+        return StreamingResponse(
+            generate_streaming_response(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*",
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"流式对话失败: {str(e)}")
 
 @router.post("/chat/message")
 async def send_chat_message(request: ChatMessageRequest):
@@ -724,6 +967,306 @@ def generate_fallback_response(message: str):
 
 请告诉我您的具体需求，我会为您提供专业的投资分析！"""
     return clean_text(response)
+
+async def generate_analysis_stream(message: str, context: Dict[str, Any]):
+    """生成股票分析的流式响应"""
+    # 根据消息内容动态生成步骤
+    analysis_steps = [
+        "正在思考...",
+        "正在思考...", 
+        "正在思考...",
+        "正在思考...",
+        "正在思考..."
+    ]
+    
+    category = determine_step_category_from_message(message)
+    
+    for i, step_content in enumerate(analysis_steps):
+        # 智能判断resourceType和results
+        step_context = {
+            'step_number': i + 1,
+            'user_message': message,
+            **(context or {})
+        }
+        resource_type, results = determine_resource_type_from_content(step_content, step_context)
+        
+        step_data = {
+            'type': 'progress', 
+            'content': step_content, 
+            'step': i+1, 
+            'totalSteps': len(analysis_steps), 
+            'stepId': f'step_{i+1}', 
+            'category': category,
+            'resourceType': resource_type,
+            'results': results
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+        
+        # 使用更短的间隔，减少阻塞感
+        await asyncio.sleep(0.5)
+    
+    # 使用通义千问生成分析内容
+    try:
+        # 构建分析提示词
+        analysis_prompt = f"""
+请作为专业的投资顾问，针对用户的问题进行全面分析：
+
+用户问题：{message}
+
+请从以下几个维度进行分析：
+1. 问题理解和关键要点
+2. 相关市场数据分析  
+3. 技术面和基本面分析
+4. 风险评估
+5. 具体的投资建议
+
+请提供专业、详细的分析，并给出具体可操作的建议。
+"""
+        
+        # 调用通义千问API - 异步处理，避免长时间阻塞
+        ai_response = await asyncio.get_event_loop().run_in_executor(
+            None, 
+            lambda: qwen_analyzer.analyze_text(analysis_prompt, max_tokens=2000)
+        )
+        
+        if ai_response:
+            # 将AI回复分段输出，每段间隔更短
+            analysis_parts = ai_response.split('\n\n')
+            
+            for part in analysis_parts:
+                if part.strip():
+                    yield f"data: {json.dumps({'type': 'content', 'content': part.strip(), 'stepId': 'ai_analysis', 'category': 'result'})}\n\n"
+                    await asyncio.sleep(0.3)  # 减少间隔时间
+                else:
+                    yield f"data: {json.dumps({'type': 'content', 'content': '', 'stepId': 'ai_analysis'})}\n\n"
+                    await asyncio.sleep(0.05)  # 空行间隔很短
+        else:
+            # 降级回复
+            fallback_parts = [
+                f"基于您的问题「{message}」，我为您进行了全面的市场分析。",
+                "",
+                "📊 **市场概况分析**",
+                "当前市场处于震荡调整阶段，整体估值相对合理。科技股和新能源板块仍有较好的长期投资价值。",
+                "",
+                "📈 **技术面分析**", 
+                "从技术指标来看，主要指数已经在重要支撑位附近获得支撑，短期有望形成反弹。建议关注成交量变化。",
+                "",
+                "💰 **投资建议**",
+                "1. 短期内保持谨慎，关注市场情绪变化",
+                "2. 中长期看好优质龙头企业",
+                "3. 建议分批建仓，控制仓位风险"
+            ]
+            
+            for part in fallback_parts:
+                if part.strip():
+                    yield f"data: {json.dumps({'type': 'content', 'content': part, 'stepId': 'fallback_analysis', 'category': 'result'})}\n\n"
+                    await asyncio.sleep(0.2)  # 减少间隔
+                else:
+                    yield f"data: {json.dumps({'type': 'content', 'content': part, 'stepId': 'fallback_analysis'})}\n\n"
+                    await asyncio.sleep(0.05)
+                    
+    except Exception as e:
+        logger.error(f"通义千问分析失败: {e}")
+        error_msg = "抱歉，AI分析服务暂时遇到问题，请稍后重试。"
+        yield f"data: {json.dumps({'type': 'content', 'content': error_msg, 'stepId': 'error', 'category': 'error'})}\n\n"
+
+async def generate_strategy_stream(message: str, context: Dict[str, Any]):
+    """生成投资策略的流式响应"""
+    # 根据消息内容动态生成策略步骤
+    strategy_steps = [
+        "正在思考...",
+        "正在思考...",
+        "正在思考...",
+        "正在思考...",
+        "正在思考..."
+    ]
+    
+    category = determine_step_category_from_message(message)
+    
+    for i, step_content in enumerate(strategy_steps):
+        # 智能判断resourceType和results
+        step_context = {
+            'step_number': i + 1,
+            'user_message': message,
+            **(context or {})
+        }
+        resource_type, results = determine_resource_type_from_content(step_content, step_context)
+        
+        step_data = {
+            'type': 'progress', 
+            'content': step_content, 
+            'step': i+1, 
+            'totalSteps': len(strategy_steps), 
+            'stepId': f'strategy_step_{i+1}', 
+            'category': category,
+            'resourceType': resource_type,
+            'results': results
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+        await asyncio.sleep(0.4)  # 减少延迟
+    
+    # 使用通义千问生成策略内容
+    try:
+        strategy_prompt = f"""
+请作为资深投资策略师，针对用户的策略需求制定投资方案：
+
+用户需求：{message}
+
+请提供以下内容：
+1. 投资目标分析
+2. 风险偏好评估
+3. 具体的资产配置建议（包括比例）
+4. 推荐的投资品种和理由
+5. 风险控制措施
+6. 预期收益和时间周期
+
+请给出专业、具体、可操作的投资策略。
+"""
+        
+        # 异步调用AI服务
+        ai_response = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: qwen_analyzer.analyze_text(strategy_prompt, max_tokens=2000)
+        )
+        
+        if ai_response:
+            # 将AI回复分段输出
+            strategy_parts = ai_response.split('\n\n')
+            
+            for part in strategy_parts:
+                if part.strip():
+                    yield f"data: {json.dumps({'type': 'content', 'content': part.strip(), 'stepId': 'ai_strategy', 'category': 'result'})}\n\n"
+                    await asyncio.sleep(0.3)
+                else:
+                    yield f"data: {json.dumps({'type': 'content', 'content': '', 'stepId': 'ai_strategy'})}\n\n"
+                    await asyncio.sleep(0.05)
+        else:
+            # 降级策略回复
+            fallback_parts = [
+                f"根据您的咨询「{message}」，我为您制定了以下投资策略：",
+                "",
+                "🎯 **投资目标**",
+                "在控制风险的前提下，追求稳健的资产增值，预期年化收益率12-18%。",
+                "",
+                "📋 **资产配置建议**",
+                "• 60% 优质蓝筹股（银行、消费、医药）",
+                "• 25% 成长性科技股（新能源、人工智能）", 
+                "• 10% 债券基金（提供稳定收益）",
+                "• 5% 现金储备（应对市场机会）",
+                "",
+                "⚠️ **风险控制**",
+                "• 单只股票持仓不超过总资产的10%",
+                "• 设置止损位，单笔亏损不超过5%",
+                "• 定期评估和调整持仓结构"
+            ]
+            
+            for part in fallback_parts:
+                if part.strip():
+                    yield f"data: {json.dumps({'type': 'content', 'content': part, 'stepId': 'fallback_strategy', 'category': 'result'})}\n\n"
+                    await asyncio.sleep(0.3)
+                else:
+                    yield f"data: {json.dumps({'type': 'content', 'content': part, 'stepId': 'fallback_strategy'})}\n\n"
+                    await asyncio.sleep(0.05)
+                    
+    except Exception as e:
+        logger.error(f"策略生成失败: {e}")
+        error_msg = "抱歉，策略生成服务暂时遇到问题，请稍后重试。"
+        yield f"data: {json.dumps({'type': 'content', 'content': error_msg, 'stepId': 'error', 'category': 'error'})}\n\n"
+
+async def generate_general_stream(message: str, context: Dict[str, Any]):
+    """生成通用对话的流式响应"""
+    # 根据消息内容动态生成通用步骤
+    general_steps = [
+        "正在思考...", 
+        "正在思考...",
+        "正在思考...",
+        "正在思考..."
+    ]
+    
+    category = determine_step_category_from_message(message)
+    
+    for i, step_content in enumerate(general_steps):
+        # 智能判断resourceType和results
+        step_context = {
+            'step_number': i + 1,
+            'user_message': message,
+            **(context or {})
+        }
+        resource_type, results = determine_resource_type_from_content(step_content, step_context)
+        
+        step_data = {
+            'type': 'progress', 
+            'content': step_content, 
+            'step': i+1, 
+            'totalSteps': len(general_steps), 
+            'stepId': f'general_step_{i+1}', 
+            'category': category,
+            'resourceType': resource_type,
+            'results': results
+        }
+        yield f"data: {json.dumps(step_data)}\n\n"
+        await asyncio.sleep(0.3)  # 减少延迟
+    
+    # 使用通义千问生成通用回复
+    try:
+        general_prompt = f"""
+请作为专业的AI投资助手，回答用户的问题：
+
+用户问题：{message}
+
+请提供：
+1. 对问题的理解和分析
+2. 相关的投资知识或市场信息
+3. 实用的建议或指导
+4. 如果需要，提供进一步咨询的方向
+
+请保持专业、友好、有帮助的语调。
+"""
+        
+        # 异步调用AI服务
+        ai_response = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: qwen_analyzer.analyze_text(general_prompt, max_tokens=1500)
+        )
+        
+        if ai_response:
+            # 将AI回复分段输出
+            response_parts = ai_response.split('\n\n')
+            
+            for part in response_parts:
+                if part.strip():
+                    yield f"data: {json.dumps({'type': 'content', 'content': part.strip(), 'stepId': 'ai_general', 'category': 'result'})}\n\n"
+                    await asyncio.sleep(0.25)  # 更快的响应
+                else:
+                    yield f"data: {json.dumps({'type': 'content', 'content': '', 'stepId': 'ai_general'})}\n\n"
+                    await asyncio.sleep(0.05)
+        else:
+            # 降级通用回复
+            fallback_parts = [
+                f"感谢您的提问！关于「{message}」，",
+                "",
+                "我理解您想了解相关的投资信息。作为您的AI投资助手，我可以为您提供：",
+                "",
+                "💡 **市场分析** - 实时的市场动态和趋势分析",
+                "📊 **数据解读** - 专业的财务数据和技术指标解读", 
+                "🎯 **投资建议** - 个性化的投资策略和风险提示",
+                "📈 **组合管理** - 资产配置和投资组合优化建议",
+                "",
+                "如果您有具体的投资问题，欢迎随时咨询。我会根据最新的市场情况为您提供专业的分析和建议。"
+            ]
+            
+            for part in fallback_parts:
+                if part.strip():
+                    yield f"data: {json.dumps({'type': 'content', 'content': part, 'stepId': 'fallback_general', 'category': 'result'})}\n\n"
+                    await asyncio.sleep(0.25)
+                else:
+                    yield f"data: {json.dumps({'type': 'content', 'content': part, 'stepId': 'fallback_general'})}\n\n"
+                    await asyncio.sleep(0.05)
+                    
+    except Exception as e:
+        logger.error(f"通用回复生成失败: {e}")
+        error_msg = "抱歉，AI助手暂时遇到问题，请稍后重试。我会尽快为您提供帮助。"
+        yield f"data: {json.dumps({'type': 'content', 'content': error_msg, 'stepId': 'error', 'category': 'error'})}\n\n"
 
 async def generate_ai_response(message: str, context: Dict[str, Any] = None):
     """生成AI回复（保留兼容性）"""

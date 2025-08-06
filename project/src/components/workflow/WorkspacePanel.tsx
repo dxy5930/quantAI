@@ -8,7 +8,19 @@ import {
   Code
 } from 'lucide-react';
 import { InfoTab, BrowserTab, ResourcesTab, DatabaseTab, ApiTab } from './tabs';
+import PythonApiStatus from '../common/PythonApiStatus';
 import { TaskContext, AgentStatus } from './types';
+
+interface ExecutionStep {
+  id: string;
+  content: string;
+  stepNumber: number;
+  totalSteps: number;
+  category: 'analysis' | 'strategy' | 'general' | 'result' | 'error';
+  timestamp: Date;
+  isClickable?: boolean;
+  isCompleted?: boolean; // 新增：标识步骤是否已完成
+}
 
 interface WorkspacePanelProps {
   selectedWorkflowId: string | null;
@@ -19,8 +31,6 @@ interface WorkspacePanelProps {
   targetTab?: string | null;
 }
 
-
-
 export const WorkspacePanel: React.FC<WorkspacePanelProps> = observer(({
   selectedWorkflowId,
   taskContext,
@@ -29,8 +39,41 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = observer(({
   selectedNodeId,
   targetTab
 }) => {
-  const [activeTab, setActiveTab] = useState<string>('resources');
+  const [activeTab, setActiveTab] = useState<string>('info');
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['current-agent']));
+  const [selectedStep, setSelectedStep] = useState<ExecutionStep | null>(null);
+
+  // 监听全局的步骤选择事件
+  useEffect(() => {
+    const handleStepSelection = (data: any) => {
+      if (data.type === 'step_details') {
+        setSelectedStep(data.step);
+        setActiveTab('info'); // 自动切换到info标签页
+      } else if (data.type === 'current_step') {
+        // 处理当前执行步骤
+        setSelectedStep(data.step);
+        setActiveTab('info');
+        
+        // 如果是第一个步骤，确保面板显示在实时跟随标签页
+        if (data.isFirstStep) {
+          console.log('第一个步骤开始，切换到实时跟随标签页');
+          setActiveTab('info');
+        }
+      } else if (data.type === 'task_start') {
+        // 任务开始时，切换到实时跟随
+        setActiveTab('info');
+      }
+    };
+
+    // 设置全局函数以接收步骤选择
+    (window as any).updateWorkspacePanel = handleStepSelection;
+
+    return () => {
+      if ((window as any).updateWorkspacePanel === handleStepSelection) {
+        delete (window as any).updateWorkspacePanel;
+      }
+    };
+  }, []);
 
   // 当选择节点时，自动切换到对应资源标签页
   useEffect(() => {
@@ -243,7 +286,7 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = observer(({
       baseTabs.push({ id: 'info', label: '实时跟随', icon: Activity });
     }
     
-    // 始终显示所有tab类型
+    // 始终显示所有tab类型（移除chat标签页）
     baseTabs.push({ id: 'browser', label: '网页', icon: Globe });
     baseTabs.push({ id: 'database', label: '数据', icon: Database });
     baseTabs.push({ id: 'apis', label: 'API', icon: Code });
@@ -280,6 +323,11 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = observer(({
 
   return (
     <div className="h-full flex flex-col">
+      {/* Python API状态显示 */}
+      <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+        <PythonApiStatus />
+      </div>
+
       {/* 动态标签页头部 */}
       <div className="flex border-b border-gray-200 dark:border-gray-700 overflow-x-auto">
         {dynamicTabs.map(tab => {
@@ -306,7 +354,11 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = observer(({
       {/* 标签页内容 */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         {activeTab === 'info' && (
-          <InfoTab taskContext={mockTaskContext} currentAgent={currentAgent} />
+          <InfoTab 
+            taskContext={mockTaskContext} 
+            currentAgent={currentAgent}
+            selectedStep={selectedStep}
+          />
         )}
 
         {activeTab === 'browser' && (

@@ -2,6 +2,85 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 打字机效果的动画样式 */
+.typing-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.typing-indicator span {
+  height: 6px;
+  width: 6px;
+  background-color: #9ca3af;
+  border-radius: 50%;
+  display: inline-block;
+  opacity: 0.4;
+}
+
+.typing-indicator span:nth-child(1) {
+  animation: bounce 1.4s infinite 0.1s;
+}
+.typing-indicator span:nth-child(2) {
+  animation: bounce 1.4s infinite 0.3s;
+}
+.typing-indicator span:nth-child(3) {
+  animation: bounce 1.4s infinite 0.5s;
+}
+
+@keyframes bounce {
+  0%, 80%, 100% { 
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  40% { 
+    transform: translateY(-8px);
+    opacity: 1;
+  }
+}
+
+/* 深色模式下的打字机效果 */
+.dark .typing-indicator span {
+  background-color: #6b7280;
+}
+
+/* 流式文本渐入效果 */
+.stream-text {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 进度条动画 */
+.progress-bar {
+  transition: width 0.3s ease-in-out;
+}
+
+/* 消息气泡动画 */
+.message-bubble {
+  animation: messageSlideIn 0.4s ease-out;
+}
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* 主题变量 */
 :root {
   /* 浅色主题 */

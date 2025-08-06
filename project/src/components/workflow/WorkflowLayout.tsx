@@ -24,6 +24,7 @@ export const WorkflowLayout: React.FC<WorkflowLayoutProps> = observer(({ classNa
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [nodeResource, setNodeResource] = useState<NodeResource | null>(null);
   const [targetTab, setTargetTab] = useState<string | null>(null);
+  const [isTaskRunning, setIsTaskRunning] = useState(false); // 新增：跟踪任务运行状态
   
   // 使用useResizable Hook替换原有的分隔条逻辑
   const {
@@ -36,6 +37,45 @@ export const WorkflowLayout: React.FC<WorkflowLayoutProps> = observer(({ classNa
     minWidth: 280,
     maxWidth: undefined // 将在组件内部计算
   });
+
+  // 监听任务执行状态，用于控制右侧面板显示
+  useEffect(() => {
+    const handleTaskStatusUpdate = (data: any) => {
+      if (data.type === 'current_step' && data.isFirstStep) {
+        // 第一个步骤开始时，拉起右侧面板并设置为info tab
+        setIsTaskRunning(true);
+        setTargetTab('info');
+      } else if (data.type === 'task_start') {
+        // 任务开始时，确保右侧面板显示并切换到实时跟随
+        setIsTaskRunning(true);
+        setTargetTab('info');
+      } else if (data.type === 'task_complete') {
+        // 任务完成时可以选择保持面板打开或关闭
+        // setIsTaskRunning(false); // 可选择是否关闭
+      }
+    };
+
+    // 设置全局函数以接收任务状态更新
+    const originalUpdateFunction = (window as any).updateWorkspacePanel;
+    (window as any).updateWorkspacePanel = (data: any) => {
+      // 处理我们自己的逻辑
+      handleTaskStatusUpdate(data);
+      
+      // 调用原始函数（如果存在）
+      if (originalUpdateFunction) {
+        originalUpdateFunction(data);
+      }
+    };
+
+    return () => {
+      // 清理时恢复原始函数
+      if ((window as any).updateWorkspacePanel && !originalUpdateFunction) {
+        delete (window as any).updateWorkspacePanel;
+      } else if (originalUpdateFunction) {
+        (window as any).updateWorkspacePanel = originalUpdateFunction;
+      }
+    };
+  }, []);
 
   // 当选择的工作流改变时更新任务上下文
   useEffect(() => {
@@ -359,7 +399,7 @@ export const WorkflowLayout: React.FC<WorkflowLayoutProps> = observer(({ classNa
   };
 
   // 判断是否应该显示右侧面板
-  const shouldShowRightPanel = selectedNodeId || (agentStatus && agentStatus.isRunning) || taskContext;
+  const shouldShowRightPanel = selectedNodeId || (agentStatus && agentStatus.isRunning) || taskContext || isTaskRunning;
 
   return (
     <div ref={containerRef} className={`h-full flex bg-gray-50 dark:bg-slate-900 p-4 ${className}`}>
