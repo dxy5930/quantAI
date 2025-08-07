@@ -22,7 +22,7 @@ import {
 import { createStreamingChat } from '../../services/pythonApiClient';
 import { pythonApiClient } from '../../services/pythonApiClient';
 import { workflowResourceManager } from '../../services/workflowResourceManager';
-import { workflowApi, type WorkflowState } from '../../services/workflowApi';
+import { workflowApi, type WorkflowState, getWorkflowHistory } from '../../services/workflowApi';
 import { 
   getResourceTypeConfig, 
   getStepCategoryConfig, 
@@ -222,6 +222,61 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
       setIsRestoring(false);
     }
   };
+
+  // 加载工作流历史
+  useEffect(() => {
+    const loadWorkflowHistory = async () => {
+      if (!workflowId) return;
+      
+      try {
+        console.log('开始加载工作流历史:', workflowId);
+        const historyData = await getWorkflowHistory(workflowId);
+        
+        if (historyData && historyData.steps && historyData.steps.length > 0) {
+          // 将历史步骤转换为ExecutionStep格式
+          const historicalSteps: ExecutionStep[] = historyData.steps.map((step: any) => ({
+            id: step.step_id,
+            content: step.content,
+            stepNumber: step.step_number,
+            totalSteps: historyData.workflow.total_steps || step.step_number,
+            category: step.category as ExecutionStep['category'],
+            resourceType: step.resource_type as ExecutionStep['resourceType'],
+            timestamp: new Date(step.created_at),
+            isClickable: true,
+            isCompleted: step.status === 'completed',
+            results: step.results || [],
+            executionDetails: step.execution_details || {},
+            urls: step.urls || [],
+            files: step.files || []
+          }));
+          
+          setCurrentExecutionSteps(historicalSteps);
+          console.log('加载历史步骤成功:', historicalSteps.length, '个步骤');
+        }
+        
+        if (historyData && historyData.messages && historyData.messages.length > 0) {
+          // 将历史消息转换为TaskMessage格式
+          const historicalMessages: TaskMessage[] = historyData.messages.map((msg: any) => ({
+            id: msg.message_id,
+            type: msg.message_type as TaskMessage['type'],
+            content: msg.content,
+            timestamp: new Date(msg.created_at),
+            isComplete: msg.status === 'completed',
+            isStreaming: false,
+            data: msg.data
+          }));
+          
+          setMessages(historicalMessages);
+          console.log('加载历史消息成功:', historicalMessages.length, '条消息');
+        }
+        
+      } catch (error) {
+        console.error('加载工作流历史失败:', error);
+      }
+    };
+    
+    loadWorkflowHistory();
+  }, [workflowId]);
 
   // 初始化对话消息
   useEffect(() => {
@@ -596,6 +651,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                       files: newStep.files
                     }
                   );
+                  
+                  // 【新增】立即触发右侧资源列表刷新
+                  if ((window as any).workflowResourceRefresh) {
+                    (window as any).workflowResourceRefresh();
+                  }
                 }
 
                 // 将新步骤作为独立的系统消息添加到对话中
@@ -776,6 +836,15 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                   type: 'task_complete',
                   taskId: aiMessageId
                 });
+              }
+              break;
+              
+            // 【新增】监听资源更新事件
+            case 'resource_updated':
+              console.log('收到资源更新事件:', chunk);
+              // 直接触发ResourcesTab刷新
+              if ((window as any).workflowResourceRefresh) {
+                (window as any).workflowResourceRefresh();
               }
               break;
               
@@ -1310,7 +1379,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-2">
                               <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">
-                                步骤 {step.stepNumber}/{step.totalSteps}
+                                步骤 {step.stepNumber}
                               </span>
                               <span className={`text-xs px-2 py-1 rounded ${getStepCategoryClasses(step.category as StepCategory || 'general')}`}>
                                 {getStepCategoryConfig(step.category as StepCategory || 'general').label}
@@ -1331,11 +1400,6 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                           </div>
                           <div className="mt-1 text-gray-700 dark:text-gray-300">
                             {step.content}
-                          </div>
-                          {/* 所有步骤都显示查看详情链接，不管是否完成 */}
-                          <div className="mt-1 text-xs text-blue-600 dark:text-blue-400 flex items-center">
-                            <Play className="w-3 h-3 mr-1" />
-                            点击查看详细信息 →
                           </div>
                         </div>
                       ))}

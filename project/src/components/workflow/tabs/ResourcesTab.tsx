@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { observer } from 'mobx-react-lite';
 import { 
   Globe, 
@@ -14,6 +14,7 @@ import {
   Clock
 } from 'lucide-react';
 import { TaskContext, WebResource, DatabaseResource, ApiResource, FileResource, ChartResource } from '../types';
+import { workflowApi } from '../../../services/workflowApi';
 
 interface WorkflowResource {
   id: string;
@@ -42,88 +43,164 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
 }) => {
   const [filterType, setFilterType] = useState<string>('all');
   const [resources, setResources] = useState<WorkflowResource[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [remoteResources, setRemoteResources] = useState<WorkflowResource[]>([]);
+  // 【移除】不再需要的消息时间戳状态，改为纯SSE推送
+  // const [lastMessageTimestamp, setLastMessageTimestamp] = useState<string | null>(null);
+  // 【新增】实时轮询控制
+  const [isRealTimeEnabled, setIsRealTimeEnabled] = useState<boolean>(true);
+
+  // 获取远程资源的函数
+  const fetchRemoteResources = useCallback(async () => {
+    if (!workflowId) return;
+    
+    try {
+      setIsRefreshing(true);
+      const response = await workflowApi.getWorkflowResources(workflowId);
+      const transformedResources = response.map((r: any) => ({
+        id: r.id,
+        type: r.resource_type,
+        title: r.title,
+        description: r.description,
+        timestamp: new Date(r.created_at),
+        data: r.data,
+        category: r.category,
+        sourceStepId: r.source_step_id
+      }));
+      setRemoteResources(transformedResources);
+    } catch (error) {
+      console.error('获取工作流资源失败:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [workflowId]);
+
+  // 实时轮询资源更新 - 更频繁的轮询
+  useEffect(() => {
+    if (!workflowId) return;
+    
+    // 立即获取一次资源
+    fetchRemoteResources();
+    
+    // 【修改】简化为仅初始加载和手动刷新，实时更新通过SSE推送
+    // 移除轮询机制，减少服务器压力，完全依赖SSE推送
+    
+  }, [workflowId, fetchRemoteResources]);
+
+  // 【简化】移除复杂的消息检查轮询，改为纯SSE推送响应
+  // checkForUpdates函数已不再需要
+
+  // 【新增】注册全局刷新函数，供SSE事件调用
+  useEffect(() => {
+    // 注册全局刷新函数
+    (window as any).workflowResourceRefresh = () => {
+      if (workflowId && isRealTimeEnabled) {
+        console.log('SSE触发工作流资源实时刷新');
+        fetchRemoteResources();
+      }
+    };
+
+    // 清理函数
+    return () => {
+      if ((window as any).workflowResourceRefresh) {
+        delete (window as any).workflowResourceRefresh;
+      }
+    };
+  }, [workflowId, isRealTimeEnabled, fetchRemoteResources]);
+
+  // 【新增】当工作流状态变化时，重新启用实时轮询
+  useEffect(() => {
+    if (workflowId) {
+      setIsRealTimeEnabled(true);
+      // setLastMessageTimestamp(null); // 移除此行
+    }
+  }, [workflowId]);
 
   // 聚合所有类型的资源
   useEffect(() => {
-    const aggregatedResources: WorkflowResource[] = [];
-
-    // 聚合来自taskContext的资源
+    const allResources: WorkflowResource[] = [];
+    
+    // 添加远程工作流资源
+    if (remoteResources.length > 0) {
+      allResources.push(...remoteResources);
+    }
+    
+    // 添加传入的本地资源
+    if (workflowResources.length > 0) {
+      // 过滤掉重复的资源（基于ID）
+      const existingIds = new Set(allResources.map(r => r.id));
+      const uniqueWorkflowResources = workflowResources.filter(r => !existingIds.has(r.id));
+      allResources.push(...uniqueWorkflowResources);
+    }
+    
+    // 从任务上下文添加资源
     if (taskContext) {
       // Web资源
-      taskContext.webResources?.forEach(web => {
-        aggregatedResources.push({
-          id: web.id,
-          type: 'web',
-          title: web.title,
-          description: web.description,
-          timestamp: web.timestamp,
-          data: web
-        });
-      });
+      const webResources: WorkflowResource[] = taskContext.webResources?.map(web => ({
+        id: web.id,
+        type: 'web' as const,
+        title: web.title,
+        description: web.description,
+        timestamp: web.timestamp,
+        data: {
+          url: web.url,
+          status: web.status,
+          description: web.description
+        },
+        workflowId: workflowId || '',
+        category: 'browser'
+      })) || [];
 
-      // 数据库资源
-      taskContext.databases?.forEach(db => {
-        aggregatedResources.push({
-          id: db.id,
-          type: 'database',
-          title: db.name,
-          description: db.description,
-          timestamp: new Date(),
-          data: db
-        });
-      });
+      // Database资源
+      const databaseResources: WorkflowResource[] = taskContext.databases?.map(db => ({
+        id: db.id,
+        type: 'database' as const,
+        title: db.name,
+        description: db.description,
+        timestamp: new Date(),
+        data: {
+          tables: db.tables,
+          queryUrl: db.queryUrl,
+          description: db.description
+        },
+        workflowId: workflowId || '',
+        category: 'database'
+      })) || [];
 
       // API资源
-      taskContext.apis?.forEach(api => {
-        aggregatedResources.push({
-          id: api.id,
-          type: 'api',
-          title: api.name,
-          description: api.description,
-          timestamp: new Date(),
-          data: api
-        });
-      });
+      const apiResources: WorkflowResource[] = taskContext.apis?.map(api => ({
+        id: api.id,
+        type: 'api' as const,
+        title: api.name,
+        description: api.description,
+        timestamp: new Date(),
+        data: {
+          endpoint: api.endpoint,
+          method: api.method,
+          documentation: api.documentation,
+          description: api.description
+        },
+        workflowId: workflowId || '',
+        category: 'api'
+      })) || [];
 
-      // 文件资源
-      taskContext.files?.forEach(file => {
-        aggregatedResources.push({
-          id: file.id,
-          type: 'file',
-          title: file.name,
-          description: `${file.type} - ${file.size}`,
-          timestamp: file.timestamp,
-          data: file
-        });
-      });
-
-      // 图表资源
-      taskContext.charts?.forEach(chart => {
-        aggregatedResources.push({
-          id: chart.id,
-          type: 'chart',
-          title: chart.title,
-          description: chart.description,
-          timestamp: chart.timestamp,
-          data: chart
-        });
-      });
+      // 过滤重复资源并添加
+      const existingIds = new Set(allResources.map(r => r.id));
+      const contextResources = [...webResources, ...databaseResources, ...apiResources];
+      const uniqueContextResources = contextResources.filter(r => !existingIds.has(r.id));
+      allResources.push(...uniqueContextResources);
     }
-
-    // 聚合来自workflowResources的资源
-    aggregatedResources.push(...workflowResources);
-
-    // 按时间倒序排列
-    aggregatedResources.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-
-    setResources(aggregatedResources);
-  }, [taskContext, workflowResources]);
+    
+    // 按时间戳降序排序（最新的在前）
+    allResources.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    
+    setResources(allResources);
+  }, [remoteResources, workflowResources, taskContext, workflowId]);
 
   // 过滤资源
-  const filteredResources = resources.filter(resource => {
-    const matchesType = filterType === 'all' || resource.type === filterType;
-    return matchesType;
-  });
+  const filteredResources = filterType === 'all' 
+    ? resources 
+    : resources.filter(resource => resource.type === filterType);
 
   const getResourceIcon = (type: string) => {
     switch (type) {
@@ -176,10 +253,8 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
     }
   };
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleString('zh-CN', { 
-      month: '2-digit',
-      day: '2-digit',
+  const formatTime = (timestamp: Date) => {
+    return timestamp.toLocaleTimeString('zh-CN', {
       hour: '2-digit',
       minute: '2-digit'
     });
@@ -201,9 +276,34 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <h3 className="font-medium text-gray-900 dark:text-white">工作流资源</h3>
         <div className="flex items-center space-x-2">
-          <button className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors">
-            <RefreshCw className="w-4 h-4 text-gray-400" />
+          {/* 【新增】实时更新开关 */}
+          <button
+            onClick={() => setIsRealTimeEnabled(!isRealTimeEnabled)}
+            className={`p-1 rounded transition-colors ${
+              isRealTimeEnabled 
+                ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400' 
+                : 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500'
+            }`}
+            title={isRealTimeEnabled ? '实时更新已启用' : '实时更新已禁用'}
+          >
+            <div className={`w-2 h-2 rounded-full ${isRealTimeEnabled ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
           </button>
+          
+          <button 
+            onClick={fetchRemoteResources}
+            disabled={isRefreshing}
+            className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-50"
+            title="手动刷新资源列表"
+          >
+            <RefreshCw className={`w-4 h-4 text-gray-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </button>
+          {isRefreshing && (
+            <span className="text-xs text-gray-500">更新中...</span>
+          )}
+          {/* 【新增】实时状态指示 */}
+          {isRealTimeEnabled && (
+            <span className="text-xs text-green-600 dark:text-green-400">实时</span>
+          )}
         </div>
       </div>
 

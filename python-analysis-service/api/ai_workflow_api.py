@@ -23,6 +23,7 @@ from models.workflow_models import (
     MessageType, WorkflowResourceType
 )
 from utils.helpers import clean_text
+from services.workflow_persistence_service import WorkflowPersistenceService
 
 router = APIRouter(prefix="/api/v1", tags=["AI Workflow"])
 
@@ -376,6 +377,9 @@ async def stream_chat_message(
         except:
             context_dict = {}
 
+        # 初始化工作流持久化服务
+        persistence_service = WorkflowPersistenceService(db)
+
         # 初始化对话历史
         if conversation_id not in conversation_storage:
             conversation_storage[conversation_id] = []
@@ -387,7 +391,15 @@ async def stream_chat_message(
             "content": message,
             "timestamp": datetime.now().isoformat()
         }
-        conversation_storage[conversation_id].append(user_message)
+        
+        # 保存用户消息到数据库
+        if workflow_id:
+            persistence_service.save_message(workflow_id, {
+                "messageId": user_message["id"],
+                "type": "user", 
+                "content": message,
+                "status": "sent"
+            })
 
         # 创建AI消息ID
         ai_message_id = f"msg_{uuid.uuid4()}"
@@ -401,23 +413,39 @@ async def stream_chat_message(
                 # 短暂延迟确保start事件被处理
                 await asyncio.sleep(0.1)
                 
+                # 保存AI消息开始到数据库
+                if workflow_id:
+                    persistence_service.save_message(workflow_id, {
+                        "messageId": ai_message_id,
+                        "type": "assistant",
+                        "content": "正在思考中...",
+                        "status": "started"
+                    })
+                
                 # 2. 基于消息内容路由到不同的处理逻辑
                 message_lower = message.lower()
                 context = context_dict
                 
                 # 添加超时保护，避免长时间阻塞
                 try:
+                    print(f"🚀 开始路由消息处理, message_lower包含关键词检查:")
+                    print(f"   是否包含分析关键词: {any(keyword in message_lower for keyword in ['分析', '股票', '投资', '市场'])}")
+                    print(f"   是否包含策略关键词: {any(keyword in message_lower for keyword in ['策略', '建议', '推荐'])}")
+                    
                     if any(keyword in message_lower for keyword in ['分析', '股票', '投资', '市场']):
                         # 股票分析相关的分段响应
-                        async for chunk in generate_analysis_stream(message, context):
+                        print(f"📊 路由到分析流, workflow_id: {workflow_id}")
+                        async for chunk in generate_analysis_stream(message, context, workflow_id, persistence_service, ai_message_id):
                             yield chunk
                     elif any(keyword in message_lower for keyword in ['策略', '建议', '推荐']):
                         # 策略建议相关的分段响应
-                        async for chunk in generate_strategy_stream(message, context):
+                        print(f"📈 路由到策略流, workflow_id: {workflow_id}")
+                        async for chunk in generate_strategy_stream(message, context, workflow_id, persistence_service, ai_message_id):
                             yield chunk
                     else:
                         # 通用对话的分段响应
-                        async for chunk in generate_general_stream(message, context):
+                        print(f"💬 路由到通用流, workflow_id: {workflow_id}")
+                        async for chunk in generate_general_stream(message, context, workflow_id, persistence_service, ai_message_id):
                             yield chunk
                 except asyncio.TimeoutError:
                     # 超时处理
@@ -431,8 +459,14 @@ async def stream_chat_message(
                 # 3. 发送完成信号
                 yield f"data: {json.dumps({'type': 'complete', 'messageId': ai_message_id})}\n\n"
                 
-                # 4. 保存完整消息到历史记录
-                # 这里可以根据需要保存完整的AI回复
+                # 4. 保存AI消息完成状态到数据库
+                if workflow_id:
+                    persistence_service.save_message(workflow_id, {
+                        "messageId": ai_message_id,
+                        "type": "assistant", 
+                        "content": "分析完成",
+                        "status": "completed"
+                    })
                 
             except Exception as e:
                 yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
@@ -984,8 +1018,10 @@ def generate_fallback_response(message: str):
 请告诉我您的具体需求，我会为您提供专业的投资分析！"""
     return clean_text(response)
 
-async def generate_analysis_stream(message: str, context: Dict[str, Any]):
+async def generate_analysis_stream(message: str, context: Dict[str, Any], workflow_id: str, persistence_service: WorkflowPersistenceService, ai_message_id: str):
     """生成股票分析的流式响应"""
+    
+    print(f"📊 进入generate_analysis_stream函数, workflow_id: {workflow_id}, message: {message[:50]}...")
     
     # 使用AI智能生成分析步骤
     analysis_steps = await generate_smart_analysis_steps(message, context)
@@ -1017,10 +1053,78 @@ async def generate_analysis_stream(message: str, context: Dict[str, Any]):
             'urls': step_info.get('urls', []),
             'files': step_info.get('files', [])
         }
+        
+        # 保存步骤到数据库
+        if workflow_id:
+            try:
+                persistence_service.save_step(workflow_id, {
+                    'step_id': f'step_{i+1}',
+                    'step_number': i + 1,
+                    'content': step_content,
+                    'category': category,
+                    'resource_type': resource_type,
+                    'status': 'running',
+                    'results': results,
+                    'execution_details': step_info.get('executionDetails', {}),
+                    'urls': step_info.get('urls', []),
+                    'files': step_info.get('files', [])
+                })
+                
+                # 【新增】实时保存思考过程消息到数据库
+                step_message_id = f"step_msg_{i+1}_{uuid.uuid4()}"
+                persistence_service.save_message(workflow_id, {
+                    "messageId": step_message_id,
+                    "type": "task",
+                    "content": f"正在执行：{step_content}",
+                    "status": "thinking",
+                    "data": step_data
+                })
+                
+                # 【新增】保存步骤资源到数据库
+                print(f"🔄 准备保存步骤资源: step_{i+1}, workflow_id: {workflow_id}")
+                persistence_service.save_resources(workflow_id, f'step_{i+1}', {
+                    'content': step_content,
+                    'category': category,
+                    'resourceType': resource_type,
+                    'results': results,
+                    'executionDetails': step_info.get('executionDetails', {}),
+                    'urls': step_info.get('urls', []),
+                    'files': step_info.get('files', []),
+                    'stepId': f'step_{i+1}'
+                })
+                print(f"✅ 步骤资源保存调用完成")
+            except Exception as e:
+                print(f"保存步骤到数据库失败: {e}")
+        
         yield f"data: {json.dumps(step_data)}\n\n"
+        
+        # 【新增】步骤发送后立即推送资源更新事件
+        if workflow_id:
+            print(f"🔄 发送资源更新推送: 步骤 {i+1}, 工作流ID: {workflow_id}")
+            yield f"data: {json.dumps({'type': 'resource_updated', 'workflowId': workflow_id, 'trigger': 'step_thinking', 'stepNumber': i+1})}\n\n"
         
         # 使用更短的间隔，减少阻塞感
         await asyncio.sleep(0.5)
+        
+        # 标记步骤完成
+        if workflow_id:
+            try:
+                persistence_service.complete_step(workflow_id, f'step_{i+1}')
+                
+                # 【新增】保存步骤完成状态到消息
+                completion_message_id = f"step_complete_{i+1}_{uuid.uuid4()}"
+                persistence_service.save_message(workflow_id, {
+                    "messageId": completion_message_id,
+                    "type": "result",
+                    "content": f"步骤完成：{step_content}",
+                    "status": "completed",
+                    "data": {"stepId": f'step_{i+1}', "results": results}
+                })
+                
+                # 【新增】步骤完成时推送资源更新事件
+                yield f"data: {json.dumps({'type': 'resource_updated', 'workflowId': workflow_id, 'messageId': completion_message_id, 'trigger': 'step_completed'})}\n\n"
+            except Exception as e:
+                print(f"标记步骤完成失败: {e}")
     
     # 使用通义千问生成分析内容
     try:
@@ -1062,7 +1166,27 @@ async def generate_analysis_stream(message: str, context: Dict[str, Any]):
             
             for part in analysis_parts:
                 if part.strip():
-                    yield f"data: {json.dumps({'type': 'content', 'content': part.strip(), 'stepId': 'ai_analysis', 'category': 'result'})}\n\n"
+                    part_content = part.strip()
+                    content_data = {'type': 'content', 'content': part_content, 'stepId': 'ai_analysis', 'category': 'result'}
+                    
+                    # 【新增】实时保存AI分析内容到数据库
+                    if workflow_id:
+                        try:
+                            part_message_id = f"ai_content_{uuid.uuid4()}"
+                            persistence_service.save_message(workflow_id, {
+                                "messageId": part_message_id,
+                                "type": "assistant",
+                                "content": part_content,
+                                "status": "streaming",
+                                "data": content_data
+                            })
+                            
+                            # 【新增】AI内容更新时推送资源更新事件
+                            yield f"data: {json.dumps({'type': 'resource_updated', 'workflowId': workflow_id, 'messageId': part_message_id, 'trigger': 'ai_content'})}\n\n"
+                        except Exception as e:
+                            print(f"保存AI内容到数据库失败: {e}")
+                    
+                    yield f"data: {json.dumps(content_data)}\n\n"
                     await asyncio.sleep(0.3)  # 减少间隔时间
                 else:
                     yield f"data: {json.dumps({'type': 'content', 'content': '', 'stepId': 'ai_analysis'})}\n\n"
@@ -1070,16 +1194,42 @@ async def generate_analysis_stream(message: str, context: Dict[str, Any]):
         else:
             # 降级回复
             fallback_response = generate_fallback_analysis_response(message)
+            
+            # 【新增】保存降级回复到数据库
+            if workflow_id:
+                try:
+                    fallback_message_id = f"fallback_{uuid.uuid4()}"
+                    persistence_service.save_message(workflow_id, {
+                        "messageId": fallback_message_id,
+                        "type": "assistant",
+                        "content": fallback_response,
+                        "status": "fallback"
+                    })
+                except Exception as e:
+                    print(f"保存降级回复到数据库失败: {e}")
+            
             yield f"data: {json.dumps({'type': 'content', 'content': fallback_response, 'stepId': 'fallback_analysis'})}\n\n"
-
 
     except Exception as e:
         print(f"生成分析回复失败: {e}")
         error_msg = "抱歉，分析服务暂时不可用。请稍后重试，或者提供更具体的分析需求。"
 
+        # 【新增】保存错误信息到数据库
+        if workflow_id:
+            try:
+                error_message_id = f"error_{uuid.uuid4()}"
+                persistence_service.save_message(workflow_id, {
+                    "messageId": error_message_id,
+                    "type": "system",
+                    "content": error_msg,
+                    "status": "error"
+                })
+            except Exception as e:
+                print(f"保存错误信息到数据库失败: {e}")
+
         yield f"data: {json.dumps({'type': 'content', 'content': error_msg, 'stepId': 'error', 'category': 'error'})}\n\n"
 
-async def generate_strategy_stream(message: str, context: Dict[str, Any]):
+async def generate_strategy_stream(message: str, context: Dict[str, Any], workflow_id: str, persistence_service: WorkflowPersistenceService, ai_message_id: str):
     """生成投资策略的流式响应"""
     
     # 使用AI智能生成策略步骤
@@ -1112,8 +1262,34 @@ async def generate_strategy_stream(message: str, context: Dict[str, Any]):
             'urls': step_info.get('urls', []),
             'files': step_info.get('files', [])
         }
+        
+        # 保存步骤到数据库
+        if workflow_id:
+            try:
+                persistence_service.save_step(workflow_id, {
+                    'step_id': f'strategy_step_{i+1}',
+                    'step_number': i + 1,
+                    'content': step_content,
+                    'category': category,
+                    'resource_type': resource_type,
+                    'status': 'running',
+                    'results': results,
+                    'execution_details': step_info.get('executionDetails', {}),
+                    'urls': step_info.get('urls', []),
+                    'files': step_info.get('files', [])
+                })
+            except Exception as e:
+                print(f"保存策略步骤到数据库失败: {e}")
+        
         yield f"data: {json.dumps(step_data)}\n\n"
         await asyncio.sleep(0.4)  # 减少延迟
+        
+        # 标记步骤完成
+        if workflow_id:
+            try:
+                persistence_service.complete_step(workflow_id, f'strategy_step_{i+1}')
+            except Exception as e:
+                print(f"标记策略步骤完成失败: {e}")
     
     # 使用通义千问生成策略内容
     try:
@@ -1172,7 +1348,7 @@ async def generate_strategy_stream(message: str, context: Dict[str, Any]):
 
         yield f"data: {json.dumps({'type': 'content', 'content': error_msg, 'stepId': 'error', 'category': 'error'})}\n\n"
 
-async def generate_general_stream(message: str, context: Dict[str, Any]):
+async def generate_general_stream(message: str, context: Dict[str, Any], workflow_id: str, persistence_service: WorkflowPersistenceService, ai_message_id: str):
     """生成通用对话的流式响应"""
     
     # 使用AI智能生成通用步骤
@@ -1205,8 +1381,34 @@ async def generate_general_stream(message: str, context: Dict[str, Any]):
             'urls': step_info.get('urls', []),
             'files': step_info.get('files', [])
         }
+        
+        # 保存步骤到数据库
+        if workflow_id:
+            try:
+                persistence_service.save_step(workflow_id, {
+                    'step_id': f'general_step_{i+1}',
+                    'step_number': i + 1,
+                    'content': step_content,
+                    'category': category,
+                    'resource_type': resource_type,
+                    'status': 'running',
+                    'results': results,
+                    'execution_details': step_info.get('executionDetails', {}),
+                    'urls': step_info.get('urls', []),
+                    'files': step_info.get('files', [])
+                })
+            except Exception as e:
+                print(f"保存通用步骤到数据库失败: {e}")
+        
         yield f"data: {json.dumps(step_data)}\n\n"
         await asyncio.sleep(0.3)  # 减少延迟
+        
+        # 标记步骤完成
+        if workflow_id:
+            try:
+                persistence_service.complete_step(workflow_id, f'general_step_{i+1}')
+            except Exception as e:
+                print(f"标记通用步骤完成失败: {e}")
     
     # 使用通义千问生成通用回复 - 添加超时和降级机制
     try:
@@ -1378,34 +1580,43 @@ async def generate_smart_analysis_steps(message: str, context: Dict[str, Any]) -
         if any(keyword in user_msg_lower for keyword in ['股票', '代码', '000', '300', '600']):
             # 股票分析类步骤
             if complexity == 'simple':
-                # 简单股票查询：2-3步
+                # 简单股票查询：2-3步，每步都有实际资源
                 return [
                     {
-                        "content": f"查询股票基本信息：{message[:20]}...",
-                        "resourceType": "database",
+                        "content": f"搜索股票基本信息：{message[:20]}...",
+                        "resourceType": "browser",
                         "results": ["股票基本面", "实时价格"],
                         "executionDetails": {"taskType": "股票查询", "complexity": "简单"},
-                        "urls": [],
+                        "urls": [
+                            "https://finance.sina.com.cn",
+                            "https://quote.eastmoney.com",
+                            "https://xueqiu.com"
+                        ],
                         "files": []
                     },
                     {
-                        "content": "AI生成简要分析结论",
+                        "content": "AI生成简要分析结论并制作图表",
                         "resourceType": "api",
-                        "results": ["基础评估", "简要建议"],
+                        "results": ["基础评估", "简要建议", "价格趋势图"],
                         "executionDetails": {"engine": "通义千问", "analysisType": "快速分析"},
                         "urls": [],
-                        "files": []
+                        "files": ["股票价格趋势图.png", "基本面分析报告.pdf"]
                     }
                 ]
             elif complexity == 'complex':
-                # 深度股票分析：5-6步
+                # 深度股票分析：5-6步，每步都有丰富资源
                 return [
                     {
-                        "content": f"全面解析分析需求：{message[:20]}...",
-                        "resourceType": "general",
+                        "content": f"全面搜索股票信息：{message[:20]}...",
+                        "resourceType": "browser",
                         "results": ["需求框架", "分析维度"],
                         "executionDetails": {"taskType": "股票深度分析", "complexity": "复杂"},
-                        "urls": [],
+                        "urls": [
+                            "https://finance.sina.com.cn",
+                            "https://quote.eastmoney.com", 
+                            "https://data.eastmoney.com",
+                            "https://xueqiu.com"
+                        ],
                         "files": []
                     },
                     {
@@ -1413,43 +1624,57 @@ async def generate_smart_analysis_steps(message: str, context: Dict[str, Any]) -
                         "resourceType": "database",
                         "results": ["基本信息", "财务数据", "历史价格"],
                         "executionDetails": {"dataSource": "股票数据库", "scope": "全面数据"},
-                        "urls": [],
-                        "files": []
+                        "urls": [
+                            "https://data.eastmoney.com/bbsj/",
+                            "https://finance.sina.com.cn/realstock/"
+                        ],
+                        "files": ["财务数据报表.xlsx"]
                     },
                     {
                         "content": "搜索相关新闻和市场动态",
                         "resourceType": "browser",
                         "results": ["最新新闻", "行业动态", "市场情绪"],
                         "executionDetails": {"source": "财经媒体", "focus": "实时资讯"},
-                        "urls": [],
-                        "files": []
+                        "urls": [
+                            "https://finance.sina.com.cn/news/",
+                            "https://finance.qq.com/",
+                            "https://www.21jingji.com/",
+                            "https://wallstreetcn.com/"
+                        ],
+                        "files": ["新闻摘要.pdf"]
                     },
                     {
                         "content": "AI深度技术和基本面分析",
                         "resourceType": "api",
                         "results": ["技术指标", "财务分析", "估值模型"],
                         "executionDetails": {"engine": "通义千问", "analysisType": "深度分析"},
-                        "urls": [],
-                        "files": []
+                        "urls": [
+                            "https://data.eastmoney.com/zjlx/",
+                            "https://finance.sina.com.cn/realstock/company/"
+                        ],
+                        "files": ["技术分析图表.png", "估值模型.xlsx"]
                     },
                     {
-                        "content": "生成详细投资建议报告",
+                        "content": "生成详细投资建议报告和可视化图表",
                         "resourceType": "general",
-                        "results": ["投资评级", "目标价位", "风险提示", "操作建议"],
+                        "results": ["投资评级", "目标价位", "风险提示", "操作建议", "综合图表"],
                         "executionDetails": {"reportType": "深度分析报告"},
                         "urls": [],
-                        "files": []
+                        "files": ["投资分析报告.pdf", "股价预测图表.png", "风险收益分析图.png"]
                     }
                 ]
             else:
-                # 中等复杂度：3-4步
+                # 中等复杂度：3-4步，适量资源
                 return [
                     {
-                        "content": f"解析查询需求：{message[:20]}...",
-                        "resourceType": "general",
+                        "content": f"搜索股票基本信息：{message[:20]}...",
+                        "resourceType": "browser",
                         "results": ["需求理解", "分析框架"],
                         "executionDetails": {"taskType": "股票分析", "complexity": "中等"},
-                        "urls": [],
+                        "urls": [
+                            "https://finance.sina.com.cn",
+                            "https://quote.eastmoney.com"
+                        ],
                         "files": []
                     },
                     {
@@ -1457,8 +1682,10 @@ async def generate_smart_analysis_steps(message: str, context: Dict[str, Any]) -
                         "resourceType": "database",
                         "results": ["股票基本面", "实时价格", "成交量"],
                         "executionDetails": {"dataSource": "股票数据库", "queryType": "实时数据"},
-                        "urls": [],
-                        "files": []
+                        "urls": [
+                            "https://data.eastmoney.com/hsgt/"
+                        ],
+                        "files": ["实时行情数据.csv"]
                     },
                     {
                         "content": "调用AI引擎进行智能分析",
@@ -1466,48 +1693,57 @@ async def generate_smart_analysis_steps(message: str, context: Dict[str, Any]) -
                         "results": ["技术指标", "趋势分析", "AI评分"],
                         "executionDetails": {"engine": "通义千问", "analysisType": "技术+基本面"},
                         "urls": [],
-                        "files": []
+                        "files": ["分析图表.png"]
                     },
                     {
                         "content": "整合分析数据，生成投资建议报告",
                         "resourceType": "general",
-                        "results": ["综合评级", "投资建议", "风险提示"],
+                        "results": ["综合评级", "投资建议", "风险提示", "趋势图表"],
                         "executionDetails": {"reportType": "综合分析报告"},
                         "urls": [],
-                        "files": []
+                        "files": ["投资建议报告.pdf", "价格趋势预测图.png"]
                     }
                 ]
         elif any(keyword in user_msg_lower for keyword in ['板块', '行业', '领域']):
             # 行业板块分析步骤（复杂度天然较高）
             if complexity == 'simple':
-                # 简单行业概览：2-3步
+                # 简单行业概览：2-3步，包含实际资源
                 return [
                     {
-                        "content": f"识别行业基本信息：{message[:20]}...",
-                        "resourceType": "general", 
+                        "content": f"搜索行业基本信息：{message[:20]}...",
+                        "resourceType": "browser", 
                         "results": ["行业定位", "基本概况"],
                         "executionDetails": {"taskType": "行业概览", "complexity": "简单"},
-                        "urls": [],
+                        "urls": [
+                            "https://finance.sina.com.cn/stock/",
+                            "https://data.eastmoney.com/bkzj/",
+                            "https://www.cninfo.com.cn/"
+                        ],
                         "files": []
                     },
                     {
-                        "content": "AI生成行业基础分析",
+                        "content": "AI生成行业基础分析和图表",
                         "resourceType": "api",
-                        "results": ["行业特点", "基本前景"],
+                        "results": ["行业特点", "基本前景", "行业对比图"],
                         "executionDetails": {"engine": "通义千问", "analysisType": "行业概览"},
                         "urls": [],
-                        "files": []
+                        "files": ["行业概览图表.png", "行业分析报告.pdf"]
                     }
                 ]
             else:
-                # 中等复杂度以上：4-6步
+                # 中等复杂度以上：4-6步，丰富资源
                 steps = [
                     {
-                        "content": f"识别分析目标：{message[:20]}...",
-                        "resourceType": "general", 
+                        "content": f"全面搜索行业信息：{message[:20]}...",
+                        "resourceType": "browser", 
                         "results": ["行业定位", "分析范围"],
                         "executionDetails": {"taskType": "行业分析", "complexity": complexity},
-                        "urls": [],
+                        "urls": [
+                            "https://finance.sina.com.cn/stock/",
+                            "https://data.eastmoney.com/bkzj/",
+                            "https://www.cninfo.com.cn/",
+                            "https://www.21jingji.com/"
+                        ],
                         "files": []
                     },
                     {
@@ -1515,24 +1751,34 @@ async def generate_smart_analysis_steps(message: str, context: Dict[str, Any]) -
                         "resourceType": "browser",
                         "results": ["行业新闻", "政策动向", "市场热点"],
                         "executionDetails": {"source": "财经网站", "keywords": "行业分析"},
-                        "urls": [],
-                        "files": []
+                        "urls": [
+                            "https://finance.sina.com.cn/news/",
+                            "https://finance.qq.com/",
+                            "https://wallstreetcn.com/",
+                            "https://www.yicai.com/"
+                        ],
+                        "files": ["行业新闻摘要.pdf"]
                     },
                     {
                         "content": "获取行业内重点股票数据",
                         "resourceType": "database",
                         "results": ["龙头股票", "行业指数", "板块资金流向"],
                         "executionDetails": {"dataSource": "行业数据库"},
-                        "urls": [],
-                        "files": []
+                        "urls": [
+                            "https://data.eastmoney.com/bkzj/",
+                            "https://finance.sina.com.cn/realstock/company/"
+                        ],
+                        "files": ["行业股票数据.xlsx", "资金流向图.png"]
                     },
                     {
                         "content": "AI深度分析行业投资价值",
                         "resourceType": "api",
-                        "results": ["行业前景", "投资机会", "风险因素"],
+                        "results": ["行业前景", "投资机会", "风险因素", "对比图表"],
                         "executionDetails": {"engine": "通义千问", "focus": "行业投资价值"},
-                        "urls": [],
-                        "files": []
+                        "urls": [
+                            "https://data.eastmoney.com/zjlx/"
+                        ],
+                        "files": ["行业分析图表.png", "投资价值评估.pdf"]
                     }
                 ]
                 
@@ -1544,16 +1790,19 @@ async def generate_smart_analysis_steps(message: str, context: Dict[str, Any]) -
                             "resourceType": "database",
                             "results": ["竞争格局", "产业链分析", "供需关系"],
                             "executionDetails": {"dataSource": "产业数据库", "scope": "全产业链"},
-                            "urls": [],
-                            "files": []
+                            "urls": [
+                                "https://www.chyxx.com/",
+                                "https://www.askci.com/"
+                            ],
+                            "files": ["产业链分析图.png", "竞争格局报告.pdf"]
                         },
                         {
                             "content": "生成行业投资策略和配置建议",
                             "resourceType": "general",
-                            "results": ["投资策略", "标的推荐", "配置权重", "时机判断"],
+                            "results": ["投资策略", "标的推荐", "配置权重", "时机判断", "策略图表"],
                             "executionDetails": {"reportType": "行业投资策略报告"},
                             "urls": [],
-                            "files": []
+                            "files": ["行业投资策略.pdf", "配置建议图表.png", "投资时机分析图.png"]
                         }
                     ])
                 return steps
@@ -1597,36 +1846,45 @@ async def generate_smart_analysis_steps(message: str, context: Dict[str, Any]) -
             # 通用投资咨询步骤
             return [
                 {
-                    "content": f"理解咨询问题：{message[:20]}...",
-                    "resourceType": "general",
-                    "results": ["问题分析", "咨询方向"],
+                    "content": f"搜索相关投资信息：{message[:20]}...",
+                    "resourceType": "browser",
+                    "results": ["投资目标", "风险偏好"],
                     "executionDetails": {"taskType": "投资咨询"},
-                    "urls": [],
+                    "urls": [
+                        "https://finance.sina.com.cn/",
+                        "https://www.eastmoney.com/",
+                        "https://xueqiu.com/"
+                    ],
                     "files": []
                 },
                 {
-                    "content": "收集相关市场信息",
+                    "content": "收集市场信息和专业观点",
                     "resourceType": "browser",
-                    "results": ["市场资讯", "专业观点"],
-                    "executionDetails": {"source": "财经资讯"},
-                    "urls": [],
-                    "files": []
+                    "results": ["市场趋势", "投资机会", "专家观点"],
+                    "executionDetails": {"source": "财经媒体", "focus": "投资机会"},
+                    "urls": [
+                        "https://finance.qq.com/",
+                        "https://wallstreetcn.com/",
+                        "https://www.21jingji.com/",
+                        "https://www.yicai.com/"
+                    ],
+                    "files": ["市场观点摘要.pdf"]
                 },
                 {
                     "content": "运用AI智能分析引擎",
                     "resourceType": "api",
-                    "results": ["智能分析", "专业建议"],
+                    "results": ["智能分析", "专业建议", "风险评估图"],
                     "executionDetails": {"engine": "通义千问"},
                     "urls": [],
-                    "files": []
+                    "files": ["智能分析图表.png"]
                 },
                 {
-                    "content": "提供专业投资咨询答案",
+                    "content": "提供专业投资咨询答案和可视化报告",
                     "resourceType": "general",
-                    "results": ["专业解答", "实用建议"],
+                    "results": ["专业解答", "实用建议", "投资策略图"],
                     "executionDetails": {"deliverable": "咨询报告"},
                     "urls": [],
-                    "files": []
+                    "files": ["投资咨询报告.pdf", "策略建议图表.png", "风险收益分析.png"]
                 }
             ]
         

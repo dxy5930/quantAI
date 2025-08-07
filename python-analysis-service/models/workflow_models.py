@@ -124,6 +124,8 @@ class WorkflowMessage(Base):
     status = Column(String(50), nullable=True)
     data = Column(JSON, nullable=True)
     timestamp = Column(TIMESTAMP, default=datetime.utcnow)
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # 关联关系
     workflow = relationship("WorkflowInstance", back_populates="messages")

@@ -20,6 +20,8 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
+  Edit,
+  Check,
 } from "lucide-react";
 import { Logo } from "../common/Logo";
 import { useUserStore, useAppStore } from "../../hooks/useStore";
@@ -71,6 +73,9 @@ export const Sidebar: React.FC<SidebarProps> = observer(
     const [expandedItems, setExpandedItems] = useState<Set<string>>(
       new Set(["tasks"])
     );
+    const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+    const [editingTitle, setEditingTitle] = useState<string>("");
+    const [editingDescription, setEditingDescription] = useState<string>("");
 
 
     const menuItems: MenuItem[] = [
@@ -182,29 +187,100 @@ export const Sidebar: React.FC<SidebarProps> = observer(
       }
     };
 
+    // 开始编辑任务
+    const handleStartEdit = (task: TaskItem, event: React.MouseEvent) => {
+      event.stopPropagation(); // 阻止触发任务选择
+      setEditingTaskId(task.id);
+      setEditingTitle(task.title);
+      setEditingDescription(task.description);
+    };
+
+    // 保存编辑
+    const handleSaveEdit = async () => {
+      if (!editingTaskId) return;
+      
+      try {
+        // 更新本地状态
+        updateTask(editingTaskId, {
+          title: editingTitle,
+          description: editingDescription,
+        });
+
+        // 保存到数据库
+        await workflowApi.updateWorkflowBasicInfo(editingTaskId, {
+          title: editingTitle,
+          description: editingDescription
+        });
+        
+        console.log(`工作流 ${editingTaskId} 信息已保存到数据库`);
+      } catch (error) {
+        console.error(`保存工作流 ${editingTaskId} 信息失败:`, error);
+      }
+      
+      // 重置编辑状态
+      setEditingTaskId(null);
+      setEditingTitle("");
+      setEditingDescription("");
+    };
+
+    // 取消编辑
+    const handleCancelEdit = () => {
+      setEditingTaskId(null);
+      setEditingTitle("");
+      setEditingDescription("");
+    };
+
+    // 处理输入框按键事件
+    const handleKeyPress = (event: React.KeyboardEvent, isDescription: boolean = false) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        if (!isDescription) {
+          handleSaveEdit();
+        }
+      } else if (event.key === 'Escape') {
+        handleCancelEdit();
+      }
+    };
+
     // 将更新方法暴露给其他组件
-    React.useEffect(() => {
-      // 在全局对象上暴露更新方法，供其他组件调用
-      (window as any).updateSidebarTask = (
-        taskId: string,
-        title: string,
-        description?: string
-      ) => {
-        console.log("Sidebar收到更新请求:", { taskId, title, description });
-        console.log("当前任务列表:", tasks);
+    const updateSidebarTaskRef = React.useCallback(async (
+      taskId: string,
+      title: string,
+      description?: string
+    ) => {
+      console.log("Sidebar收到更新请求:", { taskId, title, description });
+      
+      // 使用setTimeout避免在渲染期间直接调用setState
+      setTimeout(() => {
+        // 先更新本地状态
         updateTask(taskId, {
           title,
           description: description || undefined,
           status: "in_progress",
         });
-      };
+      }, 0);
 
+      // 异步保存到数据库
+      try {
+        await workflowApi.updateWorkflowBasicInfo(taskId, {
+          title,
+          description
+        });
+        console.log(`工作流 ${taskId} 信息已保存到数据库`);
+      } catch (error) {
+        console.error(`保存工作流 ${taskId} 信息失败:`, error);
+      }
+    }, [updateTask]);
+
+    React.useEffect(() => {
+      // 在全局对象上暴露更新方法，供其他组件调用
+      (window as any).updateSidebarTask = updateSidebarTaskRef;
       console.log("updateSidebarTask方法已设置");
 
       return () => {
         delete (window as any).updateSidebarTask;
       };
-    }, [updateTask, tasks]);
+    }, [updateSidebarTaskRef]);
 
     const handleNotificationClick = () => {
       navigate(ROUTES.NOTIFICATIONS);
@@ -272,6 +348,7 @@ export const Sidebar: React.FC<SidebarProps> = observer(
 
     const renderTaskItem = (task: TaskItem) => {
       const isSelected = selectedWorkflowId === task.id;
+      const isEditing = editingTaskId === task.id;
       const statusColor = {
         pending: "text-gray-500",
         in_progress: "text-blue-500",
@@ -289,31 +366,105 @@ export const Sidebar: React.FC<SidebarProps> = observer(
         <div
           key={task.id}
           className={`
-           py-3 rounded-lg cursor-pointer transition-all duration-200
+           py-3 px-3 rounded-lg transition-all duration-200 group
           ${
             isSelected
               ? "bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700"
               : "hover:bg-gray-100 dark:hover:bg-gray-700"
           }
         `}
-          onClick={() => handleTaskClick(task.id)}
+          onClick={() => !isEditing && handleTaskClick(task.id)}
         >
           <div className="flex items-start space-x-3">
             <div className={`w-2 h-2 rounded-full mt-2 ${statusColor}`} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-1">
-                <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                  {task.title}
-                </h4>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editingTitle}
+                    onChange={(e) => setEditingTitle(e.target.value)}
+                    onKeyDown={(e) => handleKeyPress(e)}
+                    onBlur={handleSaveEdit}
+                    className="flex-1 text-sm font-medium bg-transparent border-b border-blue-500 text-gray-900 dark:text-white focus:outline-none"
+                    autoFocus
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                    {task.title}
+                  </h4>
+                )}
+                {!isEditing && (
+                  <button
+                    onClick={(e) => handleStartEdit(task, e)}
+                    className="ml-1 p-1 opacity-0 group-hover:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-all"
+                    title="编辑"
+                  >
+                    <Edit className="w-3 h-3 text-gray-500" />
+                  </button>
+                )}
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
-                {task.description}
-              </p>
+              
+              {isEditing ? (
+                <div className="mb-2">
+                  <textarea
+                    value={editingDescription}
+                    onChange={(e) => setEditingDescription(e.target.value)}
+                    onKeyDown={(e) => handleKeyPress(e, true)}
+                    className="w-full text-xs bg-transparent border border-blue-500 rounded p-1 text-gray-500 dark:text-gray-400 focus:outline-none resize-none"
+                    rows={2}
+                    placeholder="描述..."
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <div className="flex justify-end space-x-1 mt-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSaveEdit();
+                      }}
+                      className="p-1 hover:bg-green-100 dark:hover:bg-green-900 rounded"
+                      title="保存"
+                    >
+                      <Check className="w-3 h-3 text-green-600" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCancelEdit();
+                      }}
+                      className="p-1 hover:bg-red-100 dark:hover:bg-red-900 rounded"
+                      title="取消"
+                    >
+                      <X className="w-3 h-3 text-red-600" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+                  {task.description}
+                </p>
+              )}
+              
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                 {task.createdAt.toLocaleString()}
               </p>
             </div>
-            <Trash className="w-4 h-4 text-red-500 self-end items-start mr-2" onClick={()=>handleDeleteTask(task.id)}/>
+            
+            {!isEditing && (
+              <div className="flex items-center space-x-1">
+                <div
+                  className="cursor-pointer"
+                  title="删除"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteTask(task.id);
+                  }}
+                >
+                  <Trash className="w-4 h-4 text-red-500 hover:text-red-700 transition-colors" />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       );

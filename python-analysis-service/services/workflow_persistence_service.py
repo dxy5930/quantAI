@@ -137,8 +137,14 @@ class WorkflowPersistenceService:
     def save_resources(self, workflow_id: str, step_id: str, step_data: dict):
         """从步骤数据中提取并保存资源"""
         try:
+            print(f"🔄 开始保存资源 - 工作流ID: {workflow_id}, 步骤ID: {step_id}")
+            print(f"   步骤数据: urls={len(step_data.get('urls', []))}, files={len(step_data.get('files', []))}, executionDetails={bool(step_data.get('executionDetails'))}")
+            
+            resource_count = 0
+            
             # 保存URL资源
             if step_data.get('urls'):
+                print(f"   保存 {len(step_data['urls'])} 个URL资源")
                 for url in step_data['urls']:
                     resource = WorkflowResource(
                         id=str(uuid.uuid4()),
@@ -151,9 +157,11 @@ class WorkflowPersistenceService:
                         source_step_id=step_data.get('stepId')
                     )
                     self.db.add(resource)
+                    resource_count += 1
             
             # 保存文件资源
             if step_data.get('files'):
+                print(f"   保存 {len(step_data['files'])} 个文件资源")
                 for file_path in step_data['files']:
                     resource = WorkflowResource(
                         id=str(uuid.uuid4()),
@@ -166,9 +174,11 @@ class WorkflowPersistenceService:
                         source_step_id=step_data.get('stepId')
                     )
                     self.db.add(resource)
+                    resource_count += 1
             
             # 保存其他资源（根据resourceType）
             if step_data.get('executionDetails'):
+                print(f"   保存执行详情资源")
                 details = step_data['executionDetails']
                 resource_type_map = {
                     'api': WorkflowResourceType.API,
@@ -189,10 +199,13 @@ class WorkflowPersistenceService:
                     source_step_id=step_data.get('stepId')
                 )
                 self.db.add(resource)
+                resource_count += 1
             
             self.db.commit()
-            logger.info(f"保存资源完成")
+            print(f"✅ 资源保存完成，共保存 {resource_count} 个资源")
+            logger.info(f"保存资源完成，共 {resource_count} 个")
         except Exception as e:
+            print(f"❌ 保存资源失败: {e}")
             logger.error(f"保存资源失败: {e}")
             self.db.rollback()
     

@@ -13,7 +13,7 @@ from models.workflow_models import (
     WorkflowResourceType, MessageType
 )
 
-router = APIRouter(prefix="/api/workflow", tags=["workflow-persistence"])
+router = APIRouter(prefix="/api/v1", tags=["workflow-persistence"])
 
 # Pydantic模型用于API响应
 from pydantic import BaseModel
@@ -367,6 +367,82 @@ async def get_messages(workflow_id: str, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取消息列表失败: {str(e)}")
 
+# 获取工作流的最新消息（支持时间戳过滤）
+@router.get("/workflows/{workflow_id}/messages/latest")
+async def get_latest_messages(
+    workflow_id: str, 
+    since: Optional[str] = None,  # ISO时间戳，获取此时间后的消息
+    limit: int = 50,  # 限制返回消息数量
+    db: Session = Depends(get_db)
+):
+    """获取工作流的最新消息（支持增量更新）"""
+    try:
+        query = db.query(WorkflowMessage).filter(
+            WorkflowMessage.workflow_id == workflow_id
+        )
+        
+        # 如果提供了时间戳，只获取该时间之后的消息
+        if since:
+            try:
+                from datetime import datetime
+                since_datetime = datetime.fromisoformat(since.replace('Z', '+00:00'))
+                query = query.filter(WorkflowMessage.timestamp > since_datetime)
+            except Exception as e:
+                print(f"解析时间戳失败: {e}")
+        
+        messages = query.order_by(
+            WorkflowMessage.timestamp.desc()
+        ).limit(limit).all()
+        
+        # 按时间正序返回
+        messages.reverse()
+        
+        return {
+            "messages": [{
+                "id": m.id,
+                "message_id": m.message_id,
+                "message_type": m.message_type.value,
+                "content": m.content,
+                "status": m.status,
+                "data": m.data,
+                "timestamp": m.timestamp.isoformat()
+            } for m in messages],
+            "count": len(messages),
+            "has_more": len(messages) == limit
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取最新消息失败: {str(e)}")
+
+# 获取工作流的消息统计信息
+@router.get("/workflows/{workflow_id}/messages/stats")
+async def get_messages_stats(workflow_id: str, db: Session = Depends(get_db)):
+    """获取工作流消息统计信息"""
+    try:
+        from sqlalchemy import func
+        
+        # 统计各类型消息数量
+        stats = db.query(
+            WorkflowMessage.message_type,
+            func.count(WorkflowMessage.id).label('count')
+        ).filter(
+            WorkflowMessage.workflow_id == workflow_id
+        ).group_by(WorkflowMessage.message_type).all()
+        
+        # 获取最新消息时间
+        latest_message = db.query(WorkflowMessage).filter(
+            WorkflowMessage.workflow_id == workflow_id
+        ).order_by(WorkflowMessage.timestamp.desc()).first()
+        
+        stats_dict = {stat.message_type.value: stat.count for stat in stats}
+        
+        return {
+            "total_messages": sum(stats_dict.values()),
+            "by_type": stats_dict,
+            "latest_timestamp": latest_message.timestamp.isoformat() if latest_message else None
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取消息统计失败: {str(e)}")
+
 # 工作流资源管理
 @router.get("/workflows/{workflow_id}/resources")
 async def get_workflow_resources(workflow_id: str, db: Session = Depends(get_db)):
@@ -389,6 +465,119 @@ async def get_workflow_resources(workflow_id: str, db: Session = Depends(get_db)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取资源列表失败: {str(e)}")
 
+@router.post("/workflows/{workflow_id}/resources")
+async def save_workflow_resource(workflow_id: str, request: dict, db: Session = Depends(get_db)):
+    """保存工作流资源"""
+    try:
+        # 检查工作流是否存在
+        workflow = db.query(WorkflowInstance).filter(WorkflowInstance.id == workflow_id).first()
+        if not workflow:
+            raise HTTPException(status_code=404, detail="工作流不存在")
+        
+        # 资源类型映射
+        resource_type_map = {
+            'web': WorkflowResourceType.WEB,
+            'database': WorkflowResourceType.DATABASE,
+            'api': WorkflowResourceType.API,
+            'file': WorkflowResourceType.FILE,
+            'chart': WorkflowResourceType.CHART,
+            'general': WorkflowResourceType.GENERAL
+        }
+        
+        resource_type = resource_type_map.get(request.get('type', 'general'), WorkflowResourceType.GENERAL)
+        
+        resource = WorkflowResource(
+            id=request.get('id', str(uuid.uuid4())),
+            workflow_id=workflow_id,
+            step_id=request.get('stepId'),
+            resource_type=resource_type,
+            title=request.get('title', '未命名资源'),
+            description=request.get('description'),
+            data=request.get('data', {}),
+            category=request.get('category'),
+            source_step_id=request.get('sourceStepId')
+        )
+        
+        # 检查是否已存在相同ID的资源
+        existing = db.query(WorkflowResource).filter(WorkflowResource.id == resource.id).first()
+        if existing:
+            # 更新现有资源
+            existing.title = resource.title
+            existing.description = resource.description
+            existing.data = resource.data
+            existing.category = resource.category
+            existing.updated_at = datetime.utcnow()
+        else:
+            # 添加新资源
+            db.add(resource)
+        
+        db.commit()
+        
+        return {"message": "资源保存成功", "resource_id": resource.id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"保存资源失败: {str(e)}")
+
+@router.post("/workflows/{workflow_id}/resources/batch")
+async def save_workflow_resources_batch(workflow_id: str, request: List[dict], db: Session = Depends(get_db)):
+    """批量保存工作流资源"""
+    try:
+        # 检查工作流是否存在
+        workflow = db.query(WorkflowInstance).filter(WorkflowInstance.id == workflow_id).first()
+        if not workflow:
+            raise HTTPException(status_code=404, detail="工作流不存在")
+        
+        # 资源类型映射
+        resource_type_map = {
+            'web': WorkflowResourceType.WEB,
+            'database': WorkflowResourceType.DATABASE,
+            'api': WorkflowResourceType.API,
+            'file': WorkflowResourceType.FILE,
+            'chart': WorkflowResourceType.CHART,
+            'general': WorkflowResourceType.GENERAL
+        }
+        
+        saved_count = 0
+        for resource_data in request:
+            resource_type = resource_type_map.get(resource_data.get('type', 'general'), WorkflowResourceType.GENERAL)
+            
+            resource = WorkflowResource(
+                id=resource_data.get('id', str(uuid.uuid4())),
+                workflow_id=workflow_id,
+                step_id=resource_data.get('stepId'),
+                resource_type=resource_type,
+                title=resource_data.get('title', '未命名资源'),
+                description=resource_data.get('description'),
+                data=resource_data.get('data', {}),
+                category=resource_data.get('category'),
+                source_step_id=resource_data.get('sourceStepId')
+            )
+            
+            # 检查是否已存在相同ID的资源
+            existing = db.query(WorkflowResource).filter(WorkflowResource.id == resource.id).first()
+            if existing:
+                # 更新现有资源
+                existing.title = resource.title
+                existing.description = resource.description
+                existing.data = resource.data
+                existing.category = resource.category
+                existing.updated_at = datetime.utcnow()
+            else:
+                # 添加新资源
+                db.add(resource)
+                saved_count += 1
+        
+        db.commit()
+        
+        return {"message": f"批量保存成功，新增 {saved_count} 个资源"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"批量保存资源失败: {str(e)}")
+
 @router.delete("/workflows/{workflow_id}")
 async def delete_workflow(workflow_id: str, db: Session = Depends(get_db)):
     """删除工作流及其相关数据"""
@@ -406,3 +595,81 @@ async def delete_workflow(workflow_id: str, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"删除工作流失败: {str(e)}") 
+
+@router.get("/workflows/{workflow_id}/history")
+async def get_workflow_history(workflow_id: str, db: Session = Depends(get_db)):
+    """获取工作流的完整历史，包括所有步骤和消息"""
+    try:
+        # 获取工作流实例
+        workflow = db.query(WorkflowInstance).filter(WorkflowInstance.id == workflow_id).first()
+        if not workflow:
+            raise HTTPException(status_code=404, detail="工作流不存在")
+        
+        # 获取所有步骤
+        steps = db.query(WorkflowStep).filter(
+            WorkflowStep.workflow_id == workflow_id
+        ).order_by(WorkflowStep.step_number).all()
+        
+        # 获取所有消息
+        messages = db.query(WorkflowMessage).filter(
+            WorkflowMessage.workflow_id == workflow_id
+        ).order_by(WorkflowMessage.created_at).all()
+        
+        # 格式化步骤数据
+        formatted_steps = []
+        for step in steps:
+            formatted_steps.append({
+                "id": step.id,
+                "step_id": step.step_id,
+                "step_number": step.step_number,
+                "content": step.content,
+                "category": step.category.value if step.category else "general",
+                "resource_type": step.resource_type.value if step.resource_type else "general",
+                "status": step.status.value if step.status else "pending",
+                "start_time": step.start_time.isoformat() if step.start_time else None,
+                "end_time": step.end_time.isoformat() if step.end_time else None,
+                "execution_details": step.execution_details,
+                "results": step.results,
+                "urls": step.urls,
+                "files": step.files,
+                "error_message": step.error_message,
+                "created_at": step.created_at.isoformat(),
+                "updated_at": step.updated_at.isoformat()
+            })
+        
+        # 格式化消息数据
+        formatted_messages = []
+        for message in messages:
+            formatted_messages.append({
+                "id": message.id,
+                "message_id": message.message_id,
+                "message_type": message.message_type.value if message.message_type else "system",
+                "content": message.content,
+                "status": message.status,
+                "data": message.data,
+                "created_at": message.created_at.isoformat(),
+                "updated_at": message.updated_at.isoformat()
+            })
+        
+        return {
+            "workflow": {
+                "id": workflow.id,
+                "title": workflow.title,
+                "description": workflow.description,
+                "status": workflow.status.value,
+                "progress_percentage": float(workflow.progress_percentage),
+                "current_step": workflow.current_step,
+                "total_steps": workflow.total_steps,
+                "start_time": workflow.start_time.isoformat(),
+                "end_time": workflow.end_time.isoformat() if workflow.end_time else None,
+                "last_activity": workflow.last_activity.isoformat(),
+                "context_data": workflow.context_data,
+                "error_message": workflow.error_message,
+                "created_at": workflow.created_at.isoformat(),
+                "updated_at": workflow.updated_at.isoformat()
+            },
+            "steps": formatted_steps,
+            "messages": formatted_messages
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取工作流历史失败: {str(e)}") 

@@ -1,4 +1,5 @@
 import { makeAutoObservable } from 'mobx';
+import { workflowApi } from './workflowApi';
 
 export interface WorkflowResource {
   id: string;
@@ -164,6 +165,53 @@ class WorkflowResourceManager {
     }
 
     this.resources.set(workflowId, workflowResources);
+    
+    // 异步保存新增的资源到数据库
+    this.persistResourcesToDatabase(workflowId, workflowResources);
+  }
+
+  // 异步持久化资源到数据库
+  private async persistResourcesToDatabase(workflowId: string, resources: WorkflowResource[]) {
+    if (resources.length === 0) return;
+    
+    try {
+      // 转换资源格式
+      const resourcesData = resources.map(resource => ({
+        id: resource.id,
+        type: resource.type,
+        title: resource.title,
+        description: resource.description,
+        data: resource.data,
+        category: resource.category,
+        stepId: resource.stepId,
+        sourceStepId: resource.stepId
+      }));
+
+      // 使用批量保存接口
+      await workflowApi.saveWorkflowResourcesBatch(workflowId, resourcesData);
+      console.log(`批量保存 ${resources.length} 个资源成功`);
+    } catch (error) {
+      console.error('批量保存资源失败:', error);
+      // 如果批量保存失败，尝试逐个保存
+      console.log('尝试逐个保存资源...');
+      for (const resource of resources) {
+        try {
+          await workflowApi.saveWorkflowResource(workflowId, {
+            id: resource.id,
+            type: resource.type,
+            title: resource.title,
+            description: resource.description,
+            data: resource.data,
+            category: resource.category,
+            stepId: resource.stepId,
+            sourceStepId: resource.stepId
+          });
+          console.log(`资源 ${resource.id} 保存成功`);
+        } catch (error) {
+          console.error(`保存资源 ${resource.id} 失败:`, error);
+        }
+      }
+    }
   }
 
   // 获取指定工作流的所有资源
