@@ -24,7 +24,7 @@ export const WorkflowLayout: React.FC<WorkflowLayoutProps> = observer(({ classNa
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [nodeResource, setNodeResource] = useState<NodeResource | null>(null);
   const [targetTab, setTargetTab] = useState<string | null>(null);
-  const [isTaskRunning, setIsTaskRunning] = useState(false); // 新增：跟踪任务运行状态
+  const [isTaskRunning, setIsTaskRunning] = useState(false);
   
   // 使用useResizable Hook替换原有的分隔条逻辑
   const {
@@ -35,40 +35,34 @@ export const WorkflowLayout: React.FC<WorkflowLayoutProps> = observer(({ classNa
   } = useResizable({
     initialWidth: 320,
     minWidth: 280,
-    maxWidth: undefined // 将在组件内部计算
+    maxWidth: undefined
   });
 
   // 监听任务执行状态，用于控制右侧面板显示
   useEffect(() => {
     const handleTaskStatusUpdate = (data: any) => {
       if (data.type === 'current_step' && data.isFirstStep) {
-        // 第一个步骤开始时，拉起右侧面板并设置为info tab
         setIsTaskRunning(true);
         setTargetTab('info');
       } else if (data.type === 'task_start') {
-        // 任务开始时，确保右侧面板显示并切换到实时跟随
         setIsTaskRunning(true);
         setTargetTab('info');
       } else if (data.type === 'task_complete') {
         // 任务完成时可以选择保持面板打开或关闭
-        // setIsTaskRunning(false); // 可选择是否关闭
       }
     };
 
     // 设置全局函数以接收任务状态更新
     const originalUpdateFunction = (window as any).updateWorkspacePanel;
     (window as any).updateWorkspacePanel = (data: any) => {
-      // 处理我们自己的逻辑
       handleTaskStatusUpdate(data);
       
-      // 调用原始函数（如果存在）
       if (originalUpdateFunction) {
         originalUpdateFunction(data);
       }
     };
 
     return () => {
-      // 清理时恢复原始函数
       if ((window as any).updateWorkspacePanel && !originalUpdateFunction) {
         delete (window as any).updateWorkspacePanel;
       } else if (originalUpdateFunction) {
@@ -77,9 +71,17 @@ export const WorkflowLayout: React.FC<WorkflowLayoutProps> = observer(({ classNa
     };
   }, []);
 
-  // 当选择的工作流改变时更新任务上下文
+  // 当选择的工作流改变时加载任务上下文
   useEffect(() => {
-    if (selectedWorkflowId === '1') {
+    if (selectedWorkflowId) {
+      loadWorkflowContext(selectedWorkflowId);
+    } else {
+      setTaskContext(undefined);
+    }
+  }, [selectedWorkflowId]);
+
+  const loadWorkflowContext = async (workflowId: string) => {
+    try {
       setTaskContext({
         taskType: 'stock-analysis',
         // 网页资源 - browser tab数据
@@ -243,11 +245,12 @@ export const WorkflowLayout: React.FC<WorkflowLayoutProps> = observer(({ classNa
           }
         ]
       });
-    } else {
+    } catch (error) {
+      console.error('Failed to load workflow context:', error);
       setTaskContext(undefined);
       setAgentStatus(undefined);
     }
-  }, [selectedWorkflowId]);
+  };
 
   // 模拟实时更新Agent状态
   useEffect(() => {
@@ -265,7 +268,7 @@ export const WorkflowLayout: React.FC<WorkflowLayoutProps> = observer(({ classNa
               outputs: agent.outputs ? [
                 ...agent.outputs,
                 `处理进度: ${Math.min(agent.progress + Math.random() * 10, 100).toFixed(0)}%`
-              ].slice(-5) : undefined // 只保留最新5条输出
+              ].slice(-5) : undefined
             };
           }
           return agent;
@@ -276,7 +279,7 @@ export const WorkflowLayout: React.FC<WorkflowLayoutProps> = observer(({ classNa
           agents: updatedAgents
         };
       });
-    }, 3000); // 每3秒更新一次
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [agentStatus?.isRunning]);
@@ -288,15 +291,12 @@ export const WorkflowLayout: React.FC<WorkflowLayoutProps> = observer(({ classNa
     // 只设置目标tab，不改变taskContext的数据
     if (['browser', 'database', 'apis', 'resources'].includes(nodeType)) {
       setTargetTab(nodeType);
-      // 清空nodeResource，避免干扰tab显示
       setNodeResource(null);
     } else {
       // 对于其他类型的节点，保持原有逻辑
       const resource = generateNodeResource(nodeId, nodeType);
       setNodeResource(resource);
     }
-    
-    // 右侧面板现在会自动显示，无需手动控制
   };
 
   // 生成节点资源数据

@@ -19,7 +19,7 @@ export const authApi = {
   // 刷新token
   async refreshToken(refreshToken: string): Promise<ApiResponse<AuthResponse>> {
     return httpClient.post(`${API_PREFIX}/auth/refresh`, {
-      refreshToken: refreshToken,
+      refresh_token: refreshToken,
     });
   },
 

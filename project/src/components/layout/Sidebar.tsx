@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { observer } from "mobx-react-lite";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { 
@@ -26,6 +26,7 @@ import { useUserStore, useAppStore } from "../../hooks/useStore";
 import { ROUTES } from "../../constants/routes";
 import { useTaskContext } from "../../router/layouts/WorkflowLayout";
 import { pythonApiClient } from '../../services/pythonApiClient';
+import { workflowApi } from '../../services/workflowApi';
 
 
 interface SidebarProps {
@@ -66,7 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = observer(
     const navigate = useNavigate();
     const userStore = useUserStore();
     const appStore = useAppStore();
-    const { tasks, addTask, updateTask } = useTaskContext();
+    const { tasks, addTask, updateTask, loadTasks } = useTaskContext();
     const [expandedItems, setExpandedItems] = useState<Set<string>>(
       new Set(["tasks"])
     );
@@ -117,7 +118,7 @@ export const Sidebar: React.FC<SidebarProps> = observer(
     };
 
     // 新建工作流处理函数
-    const handleCreateNewWorkflow = () => {
+    const handleCreateNewWorkflow = async () => {
       // 新建工作流前，清理当前的流式连接
       try {
         if (pythonApiClient.getActiveConnectionCount() > 0) {
@@ -129,26 +130,55 @@ export const Sidebar: React.FC<SidebarProps> = observer(
       }
       
       const newTaskId = `task_${Date.now()}`;
-      const newTask: TaskItem = {
-        id: newTaskId,
-        title: "新工作流", // 临时名称，等待AI生成
-        description: "等待开始对话...",
-        status: "pending",
-        createdAt: new Date(),
-      };
+      
+      // 立即创建工作流实例并落库
+      try {
+        const createdWorkflow = await workflowApi.createEmptyWorkflow(userStore.currentUser?.id);
+        console.log('工作流实例已创建并落库:', createdWorkflow);
+        
+        // 使用返回的工作流ID更新任务ID
+        const workflowId = createdWorkflow.id;
+        const newTask: TaskItem = {
+          id: workflowId,  // 使用服务器返回的工作流ID
+          title: createdWorkflow.title || "新建工作流...",
+          description: createdWorkflow.description || "正在生成工作流描述...",
+          status: "pending",
+          createdAt: new Date(),
+        };
 
-      console.log("创建新任务:", newTask);
-      addTask(newTask);
+        console.log("创建新任务:", newTask);
+        
+        // 重新加载任务列表以获取最新数据
+        await loadTasks();
 
-      // 自动选择新创建的工作流
-      if (onWorkflowSelect) {
-        onWorkflowSelect(newTaskId);
-        console.log("选择新工作流:", newTaskId);
-      }
+        // 自动选择新创建的工作流
+        if (onWorkflowSelect) {
+          onWorkflowSelect(workflowId);
+          console.log("选择新工作流:", workflowId);
+        }
 
-      // 导航到AI工作流页面
-      if (location.pathname !== ROUTES.AI_WORKFLOW) {
-        navigate(ROUTES.AI_WORKFLOW);
+        // 导航到AI工作流页面
+        if (location.pathname !== ROUTES.AI_WORKFLOW) {
+          navigate(ROUTES.AI_WORKFLOW);
+        }
+      } catch (error) {
+        console.error('创建工作流实例失败:', error);
+        // 降级处理：如果API调用失败，仍然创建本地任务
+        const newTask: TaskItem = {
+          id: newTaskId,
+          title: "新工作流",
+          description: "等待开始对话...",
+          status: "pending",
+          createdAt: new Date(),
+        };
+
+        addTask(newTask);
+        if (onWorkflowSelect) {
+          onWorkflowSelect(newTaskId);
+        }
+        if (location.pathname !== ROUTES.AI_WORKFLOW) {
+          navigate(ROUTES.AI_WORKFLOW);
+        }
       }
     };
 

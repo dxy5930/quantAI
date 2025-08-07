@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { InfoTab, BrowserTab, ResourcesTab, DatabaseTab, ApiTab } from './tabs';
 import PythonApiStatus from '../common/PythonApiStatus';
+import { workflowResourceManager } from '../../services/workflowResourceManager';
 import { TaskContext, AgentStatus } from './types';
 
 interface ExecutionStep {
@@ -199,83 +200,17 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = observer(({
     ]
   };
 
-  // 模拟任务上下文数据
-  const mockTaskContext: TaskContext = taskContext || {
-    taskType: 'web-search',
-    webResources: [
-      {
-        id: '1',
-        title: '苹果公司财报 - 东方财富',
-        url: 'https://quote.eastmoney.com/us/AAPL.html',
-        description: '苹果公司最新财报和股价信息',
-        timestamp: new Date(),
-        status: 'loaded'
-      },
-      {
-        id: '2',
-        title: 'Apple Inc. - Yahoo Finance',
-        url: 'https://finance.yahoo.com/quote/AAPL',
-        description: 'Apple stock price and financial data',
-        timestamp: new Date(Date.now() - 60000),
-        status: 'loaded'
-      },
-      {
-        id: '3',
-        title: '苹果技术分析 - TradingView',
-        url: 'https://cn.tradingview.com/symbols/NASDAQ-AAPL/',
-        description: '苹果股票技术分析图表',
-        timestamp: new Date(Date.now() - 120000),
-        status: 'loading'
-      }
-    ],
-    charts: [
-      {
-        id: '1',
-        title: 'AAPL 股价走势图',
-        type: 'candlestick',
-        description: '苹果股票近一年K线图',
-        imageUrl: '/api/charts/aapl-candlestick.png',
-        dataUrl: '/api/data/aapl-ohlc.json',
-        timestamp: new Date()
-      },
-      {
-        id: '2',
-        title: '技术指标分析',
-        type: 'line',
-        description: 'RSI, MACD, MA指标对比',
-        imageUrl: '/api/charts/aapl-indicators.png',
-        dataUrl: '/api/data/aapl-indicators.json',
-        timestamp: new Date(Date.now() - 30000)
-      },
-      {
-        id: '3',
-        title: '行业对比分析',
-        type: 'bar',
-        description: '科技股行业表现对比',
-        imageUrl: '/api/charts/tech-comparison.png',
-        dataUrl: '/api/data/tech-comparison.json',
-        timestamp: new Date(Date.now() - 60000)
-      }
-    ],
-    files: [
-      {
-        id: '1',
-        name: 'AAPL_analysis_report.pdf',
-        type: 'PDF',
-        size: '2.3 MB',
-        downloadUrl: '/api/files/aapl-analysis.pdf',
-        timestamp: new Date()
-      },
-      {
-        id: '2',
-        name: 'financial_data.xlsx',
-        type: 'Excel',
-        size: '856 KB',
-        downloadUrl: '/api/files/financial-data.xlsx',
-        timestamp: new Date(Date.now() - 120000)
-      }
-    ]
+  // 使用传入的任务上下文或空数据
+  const defaultTaskContext: TaskContext = {
+    taskType: 'general',
+    webResources: [],
+    charts: [],
+    files: [],
+    databases: [],
+    apis: []
   };
+  
+  const currentTaskContext = taskContext || defaultTaskContext;
 
   // 动态生成标签页
   const getDynamicTabs = () => {
@@ -355,21 +290,21 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = observer(({
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         {activeTab === 'info' && (
           <InfoTab 
-            taskContext={mockTaskContext} 
+            taskContext={currentTaskContext} 
             currentAgent={currentAgent}
             selectedStep={selectedStep}
           />
         )}
 
         {activeTab === 'browser' && (
-          <BrowserTab taskContext={mockTaskContext} />
+          <BrowserTab taskContext={currentTaskContext} />
         )}
 
         {activeTab === 'resources' && (
           <ResourcesTab 
-            taskContext={mockTaskContext} 
-            nodeResource={nodeResource}
-            selectedNodeId={selectedNodeId}
+            taskContext={currentTaskContext} 
+            workflowId={selectedWorkflowId}
+            workflowResources={selectedWorkflowId ? workflowResourceManager.getWorkflowResources(selectedWorkflowId) : []}
           />
         )}
 

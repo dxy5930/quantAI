@@ -60,7 +60,7 @@ class HttpClient {
 
   constructor() {
     this.instance = axios.create({
-      baseURL: import.meta.env.VITE_API_BASE_URL || 'http://172.3.65.2:3001',
+      baseURL: import.meta.env.VITE_PYTHON_API_BASE_URL || 'http://localhost:8000',
       timeout: 300000, // 5分钟超时
       headers: {
         'Content-Type': 'application/json',
@@ -75,10 +75,26 @@ class HttpClient {
     // 请求拦截器
     this.instance.interceptors.request.use(
       (config: any) => {
-        // 添加认证token
-        const token = this.getAuthToken();
-        if (token && config.headers) {
-          config.headers.Authorization = `Bearer ${token}`;
+        // 排除不需要授权的接口
+        const noAuthUrls = [
+          '/auth/login',
+          '/auth/register', 
+          '/auth/forgot-password',
+          '/auth/reset-password',
+          '/api/v1/auth/login',
+          '/api/v1/auth/register',
+          '/api/v1/auth/forgot-password', 
+          '/api/v1/auth/reset-password'
+        ];
+        
+        const needsAuth = !noAuthUrls.some(url => config.url?.includes(url));
+        
+        // 只对需要授权的接口添加认证token
+        if (needsAuth) {
+          const token = this.getAuthToken();
+          if (token && config.headers) {
+            config.headers.Authorization = `Bearer ${token}`;
+          }
         }
 
         // 添加请求时间戳
@@ -299,9 +315,9 @@ class HttpClient {
       // 否则包装为统一格式
       const wrappedResponse: SuccessResponse<T> = {
         code: 200,
-        message: 'Success',
-        data: response.data,
         success: true,
+        data: response.data,
+        message: 'Success',
         timestamp: new Date().toISOString(),
       };
       console.log('返回包装后的响应数据:', wrappedResponse);

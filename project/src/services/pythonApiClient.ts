@@ -49,11 +49,13 @@ export class PythonApiClient {
     message: string;
     conversationId?: string;
     context?: Record<string, any>;
+    workflowId?: string;  // 新增：工作流ID支持
   }): EventSource {
     const queryParams = new URLSearchParams({
       message: params.message,
       conversation_id: params.conversationId || `conv-${Date.now()}`,
-      context: JSON.stringify(params.context || {})
+      context: JSON.stringify(params.context || {}),
+      ...(params.workflowId && { workflow_id: params.workflowId })  // 添加workflow_id参数
     });
 
     const url = `${this.axiosInstance.defaults.baseURL}/api/v1/chat/stream?${queryParams.toString()}`;
@@ -245,6 +247,7 @@ export const createStreamingChat = (params: {
   message: string;
   conversationId?: string;
   context?: Record<string, any>;
+  workflowId?: string;  // 新增：工作流ID支持
 }) => pythonApiClient.createStreamingChat(params);
 
 export const sendChatMessage = (params: {

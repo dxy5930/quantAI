@@ -1,9 +1,11 @@
-import React, { Suspense, useState, createContext, useContext } from 'react';
+import React, { Suspense, useState, createContext, useContext, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '../../components/layout/Sidebar';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { ToastContainer } from '../../components/common/Toast';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { workflowApi } from '../../services/workflowApi';
+import { useUserStore } from '../../hooks/useStore';
 
 interface TaskItem {
   id: string;
@@ -18,6 +20,7 @@ interface TaskContextType {
   tasks: TaskItem[];
   updateTask: (taskId: string, updates: Partial<TaskItem>) => void;
   addTask: (task: TaskItem) => void;
+  loadTasks: () => Promise<void>;
 }
 
 const TaskContext = createContext<TaskContextType | null>(null);
@@ -33,22 +36,9 @@ export const useTaskContext = () => {
 export const WorkflowPageLayout: React.FC = () => {
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [tasks, setTasks] = useState<TaskItem[]>([
-    {
-      id: "1",
-      title: "股票分析工作流",
-      description: "智能股票筛选和分析",
-      status: "in_progress",
-      createdAt: new Date(Date.now() - 3600000),
-    },
-    {
-      id: "2",
-      title: "投资组合优化",
-      description: "基于风险评估的投资建议",
-      status: "pending",
-      createdAt: new Date(Date.now() - 86400000),
-    },
-  ]);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const userStore = useUserStore();
 
   const handleWorkflowSelect = (workflowId: string) => {
     setSelectedWorkflowId(workflowId);
@@ -64,6 +54,44 @@ export const WorkflowPageLayout: React.FC = () => {
     setTasks(prev => [task, ...prev]);
   };
 
+  const loadTasks = async () => {
+    try {
+      setIsLoading(true);
+      if (userStore.currentUser?.id) {
+        const workflows = await workflowApi.getWorkflows({
+          user_id: userStore.currentUser.id,
+          limit: 50
+        });
+        
+        const formattedTasks: TaskItem[] = workflows.map(workflow => ({
+          id: workflow.id,
+          title: workflow.title,
+          description: workflow.description || "无描述",
+          status: workflow.status === 'running' ? "in_progress" 
+                : workflow.status === 'completed' ? "completed"
+                : "pending",
+          createdAt: new Date(workflow.created_at)
+        }));
+        
+        setTasks(formattedTasks);
+        console.log('已加载工作流列表:', formattedTasks);
+      }
+    } catch (error) {
+      console.error('加载工作流列表失败:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 页面初始化时加载任务列表
+  useEffect(() => {
+    if (userStore.isLoggedIn) {
+      loadTasks();
+    } else {
+      setIsLoading(false);
+    }
+  }, [userStore.isLoggedIn, userStore.currentUser?.id]);
+
   const toggleSidebar = () => {
     setIsSidebarCollapsed(!isSidebarCollapsed);
   };
@@ -71,7 +99,8 @@ export const WorkflowPageLayout: React.FC = () => {
   const taskContextValue: TaskContextType = {
     tasks,
     updateTask,
-    addTask
+    addTask,
+    loadTasks
   };
 
   return (

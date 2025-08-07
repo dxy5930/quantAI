@@ -66,12 +66,24 @@ export class UserStore {
    */
   private async initializeAuth() {
     try {
-      // 暂时跳过后端认证检查
-      // if (authService.isAuthenticated()) {
-      //   await this.loadCurrentUser();
-      // }
+      // 检查本地存储的认证信息
+      if (authService.isAuthenticated()) {
+        // 优先从本地存储恢复用户信息
+        const localUserInfo = authService.getUserInfo();
+        if (localUserInfo) {
+          runInAction(() => {
+            this.currentUser = this.convertUserInfoToUser(localUserInfo);
+            this.isAuthenticated = true;
+          });
+        } else {
+          // 如果本地没有用户信息，尝试从服务器获取
+          await this.loadCurrentUser();
+        }
+      }
     } catch (error) {
       console.error('初始化认证状态失败:', error);
+      // 认证失败时清除可能过期的数据
+      await authService.logout();
     } finally {
       runInAction(() => {
         this.isInitialized = true;
@@ -111,7 +123,12 @@ export class UserStore {
   /**
    * 用户登录
    */
-  async login(credentials?: LoginCredentials) {
+  async login(credentials?: LoginCredentials, remember?: boolean) {
+    // 防止重复提交
+    if (this.isLoading) {
+      return;
+    }
+    
     const loginData = credentials || this.loginForm;
     
     runInAction(() => {
@@ -120,34 +137,21 @@ export class UserStore {
     });
 
     try {
-      // 暂时跳过后端验证，直接模拟登录成功
-      await new Promise(resolve => setTimeout(resolve, 500)); // 模拟网络延迟
-      
-      // 创建模拟用户数据
-      const mockUser = {
-        id: '1',
-        username: loginData.username || 'demo_user',
-        email: 'demo@example.com',
-        avatar: '',
-        role: 'user' as const,
-        level: 1,
-        createdAt: new Date().toISOString(),
-        lastLoginAt: new Date().toISOString(),
-        profile: {
-          displayName: loginData.username || 'Demo User',
-          tradingExperience: 'intermediate' as const,
-          riskTolerance: 'medium' as const
-        }
-      };
+      // 调用真实的登录API，支持记住我功能
+      const response = await authService.login(loginData, remember);
       
       runInAction(() => {
-        this.currentUser = mockUser;
+        // 确保用户对象符合User接口要求
+        this.currentUser = {
+          ...response.user,
+          level: response.user.level || 1 // 设置默认等级
+        };
         this.isAuthenticated = true;
         this.isLoading = false;
         this.clearLoginForm();
       });
 
-      return { user: mockUser, token: 'mock-token', refreshToken: 'mock-refresh-token' };
+      return response;
     } catch (error) {
       runInAction(() => {
         this.isLoading = false;
@@ -165,6 +169,11 @@ export class UserStore {
    * 用户注册
    */
   async register(data?: RegisterData) {
+    // 防止重复提交
+    if (this.isLoading) {
+      return;
+    }
+    
     const registerData = data || this.registerForm;
     
     // 转换为API需要的格式
@@ -249,7 +258,7 @@ export class UserStore {
       const response = await userApi.updateProfile(profileData);
       
       runInAction(() => {
-        if (this.currentUser && response.data) {
+        if (this.currentUser && response.success && response.data) {
           // 更新用户信息 - 创建新的用户对象确保MobX检测到变化
           console.log('UserStore: API响应数据', response.data);
           console.log('UserStore: 更新前的用户数据', JSON.stringify(this.currentUser, null, 2));

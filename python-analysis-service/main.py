@@ -13,17 +13,27 @@ python main.py
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from datetime import datetime
 import uvicorn
 import logging
 import logging.config
+import os
 from config import config
 from api.smart_stock_api import router as smart_stock_router
 from api.stock_recommendation_api import router as stock_recommendation_router
 from api.stock_array_analysis_api import router as stock_array_analysis_router
 # from api.backtest_api import router as backtest_router  # 暂时注释，文件不存在
 from api.ai_workflow_api import router as ai_workflow_router
+from api.workflow_persistence_api import router as workflow_persistence_router
+from api.workflow_soft_delete_api import router as workflow_soft_delete_router
 from api.home_api import router as home_router
+from api.auth_api import router as auth_router
+from api.user_api import router as user_router
+from api.notification_api import router as notification_router
+from models.database import init_database
+from models.workflow_models import WorkflowInstance, WorkflowStep, WorkflowResource, WorkflowMessage  # 导入模型以确保表创建
+from models.user_models import User, Notification, UserSession  # 导入用户相关模型
 
 # 配置日志 - 禁用watchfiles的频繁输出
 log_config = config.get_log_config()
@@ -64,12 +74,23 @@ async def add_process_time_header(request, call_next):
     return response
 
 # 注册路由
+app.include_router(auth_router)
+app.include_router(user_router)
+app.include_router(notification_router)
 app.include_router(smart_stock_router)
 app.include_router(stock_recommendation_router)
 app.include_router(stock_array_analysis_router)
 # app.include_router(backtest_router)  # 暂时注释，文件不存在
 app.include_router(ai_workflow_router)
+app.include_router(workflow_persistence_router)
+app.include_router(workflow_soft_delete_router)
 app.include_router(home_router)
+
+# 挂载静态文件
+uploads_dir = "uploads"
+if not os.path.exists(uploads_dir):
+    os.makedirs(uploads_dir)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 @app.get("/health")
 async def health_check():
@@ -97,6 +118,13 @@ if __name__ == "__main__":
     print(f"📖 API文档: http://{config.HOST}:{config.PORT}/docs")
     print(f"💚 健康检查: http://{config.HOST}:{config.PORT}/health")
     print(f"🔍 股票推荐: http://{config.HOST}:{config.PORT}/api/v1/stock-recommendation/recommend")
+    
+    # 初始化数据库
+    try:
+        init_database()
+        logger.info("数据库初始化完成")
+    except Exception as e:
+        logger.error(f"数据库初始化失败: {e}")
     
     # Windows 平台优化配置，避免多进程问题
     import platform

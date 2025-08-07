@@ -1,21 +1,183 @@
-import React from 'react';
-import { BarChart3, FileText, Eye, Download, File, Table } from 'lucide-react';
-import { BrowserResourcePanel } from '../BrowserResourcePanel';
-import { TaskContext, ChartResource, FileResource } from '../types';
+import React, { useState, useEffect } from 'react';
+import { observer } from 'mobx-react-lite';
+import { 
+  Globe, 
+  Database, 
+  Zap, 
+  FileText, 
+  BarChart3,
+  Download,
+  ExternalLink,
+  RefreshCw,
+  Filter,
+  Calendar,
+  Clock
+} from 'lucide-react';
+import { TaskContext, WebResource, DatabaseResource, ApiResource, FileResource, ChartResource } from '../types';
+
+interface WorkflowResource {
+  id: string;
+  type: 'web' | 'database' | 'api' | 'file' | 'chart' | 'general';
+  title: string;
+  description?: string;
+  timestamp: Date;
+  data: any;
+  stepId?: string;
+  category?: string;
+  workflowId?: string;
+  resourceType?: string;
+  executionDetails?: Record<string, any>;
+}
 
 interface ResourcesTabProps {
   taskContext?: TaskContext;
-  nodeResource?: any;
-  selectedNodeId?: string | null;
+  workflowId?: string;
+  workflowResources?: WorkflowResource[];
 }
 
-export const ResourcesTab: React.FC<ResourcesTabProps> = ({
-  taskContext,
-  nodeResource,
-  selectedNodeId
+export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({ 
+  taskContext, 
+  workflowId,
+  workflowResources = []
 }) => {
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('zh-CN', {
+  const [filterType, setFilterType] = useState<string>('all');
+  const [resources, setResources] = useState<WorkflowResource[]>([]);
+
+  // 聚合所有类型的资源
+  useEffect(() => {
+    const aggregatedResources: WorkflowResource[] = [];
+
+    // 聚合来自taskContext的资源
+    if (taskContext) {
+      // Web资源
+      taskContext.webResources?.forEach(web => {
+        aggregatedResources.push({
+          id: web.id,
+          type: 'web',
+          title: web.title,
+          description: web.description,
+          timestamp: web.timestamp,
+          data: web
+        });
+      });
+
+      // 数据库资源
+      taskContext.databases?.forEach(db => {
+        aggregatedResources.push({
+          id: db.id,
+          type: 'database',
+          title: db.name,
+          description: db.description,
+          timestamp: new Date(),
+          data: db
+        });
+      });
+
+      // API资源
+      taskContext.apis?.forEach(api => {
+        aggregatedResources.push({
+          id: api.id,
+          type: 'api',
+          title: api.name,
+          description: api.description,
+          timestamp: new Date(),
+          data: api
+        });
+      });
+
+      // 文件资源
+      taskContext.files?.forEach(file => {
+        aggregatedResources.push({
+          id: file.id,
+          type: 'file',
+          title: file.name,
+          description: `${file.type} - ${file.size}`,
+          timestamp: file.timestamp,
+          data: file
+        });
+      });
+
+      // 图表资源
+      taskContext.charts?.forEach(chart => {
+        aggregatedResources.push({
+          id: chart.id,
+          type: 'chart',
+          title: chart.title,
+          description: chart.description,
+          timestamp: chart.timestamp,
+          data: chart
+        });
+      });
+    }
+
+    // 聚合来自workflowResources的资源
+    aggregatedResources.push(...workflowResources);
+
+    // 按时间倒序排列
+    aggregatedResources.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+    setResources(aggregatedResources);
+  }, [taskContext, workflowResources]);
+
+  // 过滤资源
+  const filteredResources = resources.filter(resource => {
+    const matchesType = filterType === 'all' || resource.type === filterType;
+    return matchesType;
+  });
+
+  const getResourceIcon = (type: string) => {
+    switch (type) {
+      case 'web':
+        return <Globe className="w-5 h-5 text-blue-600" />;
+      case 'database':
+        return <Database className="w-5 h-5 text-yellow-600" />;
+      case 'api':
+        return <Zap className="w-5 h-5 text-green-600" />;
+      case 'file':
+        return <FileText className="w-5 h-5 text-purple-600" />;
+      case 'chart':
+        return <BarChart3 className="w-5 h-5 text-orange-600" />;
+      default:
+        return <FileText className="w-5 h-5 text-gray-600" />;
+    }
+  };
+
+  const getResourceTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      web: '网页',
+      database: '数据库',
+      api: 'API',
+      file: '文件',
+      chart: '图表',
+      general: '通用'
+    };
+    return labels[type] || type;
+  };
+
+  const getResourceTypeBadgeColor = (type: string) => {
+    const colors: Record<string, string> = {
+      web: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      database: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+      api: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+      file: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+      chart: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+      general: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+    };
+    return colors[type] || 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+  };
+
+  const handleResourceClick = (resource: WorkflowResource) => {
+    if (resource.type === 'web' && resource.data.url) {
+      window.open(resource.data.url, '_blank');
+    } else if (resource.type === 'file' && resource.data.downloadUrl) {
+      window.open(resource.data.downloadUrl, '_blank');
+    } else if (resource.type === 'api' && resource.data.documentation) {
+      window.open(resource.data.documentation, '_blank');
+    }
+  };
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleString('zh-CN', { 
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
@@ -23,189 +185,157 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = ({
     });
   };
 
-  const getChartTypeIcon = (type: string) => {
-    switch (type) {
-      case 'line': return <BarChart3 className="w-4 h-4" />;
-      case 'bar': return <BarChart3 className="w-4 h-4" />;
-      case 'pie': return <BarChart3 className="w-4 h-4" />;
-      case 'candlestick': return <BarChart3 className="w-4 h-4" />;
-      case 'scatter': return <BarChart3 className="w-4 h-4" />;
-      default: return <BarChart3 className="w-4 h-4" />;
-    }
-  };
-
-  const getFileTypeIcon = (type: string) => {
-    switch (type.toLowerCase()) {
-      case 'pdf': return <FileText className="w-4 h-4 text-red-600" />;
-      case 'excel': return <Table className="w-4 h-4 text-green-600" />;
-      case 'csv': return <Table className="w-4 h-4 text-blue-600" />;
-      default: return <File className="w-4 h-4 text-gray-600" />;
-    }
-  };
-
-  // 优先显示节点资源
-  if (nodeResource) {
-    return (
-      <div className="h-full">
-        {nodeResource.type === 'browser' && (
-          <BrowserResourcePanel resource={nodeResource} />
-        )}
-        {nodeResource.type === 'database' && (
-          <div className="p-4">
-            <h3 className="font-medium text-gray-900 dark:text-white mb-4">数据库资源</h3>
-            <div className="bg-gray-50 dark:bg-slate-800 rounded-lg p-4">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                数据库资源显示组件开发中...
-              </p>
-            </div>
-          </div>
-        )}
-        {nodeResource.type === 'api' && (
-          <div className="p-4">
-            <h3 className="font-medium text-gray-900 dark:text-white mb-4">API资源</h3>
-            <div className="bg-gray-50 dark:bg-slate-800 rounded-lg p-4">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                API资源显示组件开发中...
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
+  const resourceTypes = [
+    { value: 'all', label: '全部', count: resources.length },
+    { value: 'web', label: '网页', count: resources.filter(r => r.type === 'web').length },
+    { value: 'database', label: '数据库', count: resources.filter(r => r.type === 'database').length },
+    { value: 'api', label: 'API', count: resources.filter(r => r.type === 'api').length },
+    { value: 'file', label: '文件', count: resources.filter(r => r.type === 'file').length },
+    { value: 'chart', label: '图表', count: resources.filter(r => r.type === 'chart').length },
+    { value: 'general', label: '通用', count: resources.filter(r => r.type === 'general').length }
+  ].filter(type => type.count > 0);
 
   return (
-    <div className="p-4 space-y-6">
-      {/* 图表部分 */}
-      {taskContext?.charts && taskContext.charts.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-medium text-gray-900 dark:text-white flex items-center space-x-2">
-              <BarChart3 className="w-4 h-4" />
-              <span>生成图表</span>
-            </h3>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              {taskContext.charts?.length || 0} 个图表
-            </span>
+    <div className="h-full flex flex-col">
+      {/* 标题和操作栏 */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+        <h3 className="font-medium text-gray-900 dark:text-white">工作流资源</h3>
+        <div className="flex items-center space-x-2">
+          <button className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors">
+            <RefreshCw className="w-4 h-4 text-gray-400" />
+          </button>
+        </div>
+      </div>
+
+      {/* 类型过滤 */}
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+        {/* 类型过滤标签 */}
+        <div className="flex flex-wrap gap-2">
+          {resourceTypes.map(type => (
+            <button
+              key={type.value}
+              onClick={() => setFilterType(type.value)}
+              className={`px-3 py-1.5 text-xs rounded-full transition-colors ${
+                filterType === type.value
+                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                  : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              {type.label} ({type.count})
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 资源列表 */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin">
+        {filteredResources.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-gray-400 mb-2">
+              <FileText className="w-12 h-12 mx-auto" />
+            </div>
+            <p className="text-gray-500 dark:text-gray-400">
+              暂无资源
+            </p>
           </div>
-          
-          <div className="space-y-3">
-            {taskContext.charts?.map((chart: ChartResource) => (
-              <div key={chart.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2 mb-1">
-                      {getChartTypeIcon(chart.type)}
-                      <h4 className="font-medium text-gray-900 dark:text-white text-sm">
-                        {chart.title}
-                      </h4>
-                      <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-200 px-2 py-0.5 rounded-full">
-                        {chart.type}
-                      </span>
-                    </div>
-                    
-                    {chart.description && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                        {chart.description}
-                      </p>
+        ) : (
+          filteredResources.map((resource) => (
+            <div
+              key={resource.id}
+              className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              onClick={() => handleResourceClick(resource)}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  {/* 资源标题和类型 */}
+                  <div className="flex items-center space-x-2 mb-2">
+                    {getResourceIcon(resource.type)}
+                    <h4 className="font-medium text-gray-900 dark:text-white text-sm truncate flex-1">
+                      {resource.title}
+                    </h4>
+                    <span className={`text-xs px-2 py-1 rounded-full ${getResourceTypeBadgeColor(resource.type)}`}>
+                      {getResourceTypeLabel(resource.type)}
+                    </span>
+                  </div>
+
+                  {/* 描述 */}
+                  {resource.description && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 line-clamp-2">
+                      {resource.description}
+                    </p>
+                  )}
+
+                  {/* 资源特定信息 */}
+                  <div className="space-y-1">
+                    {resource.type === 'web' && resource.data.url && (
+                      <div className="text-xs text-gray-400 truncate flex items-center">
+                        <ExternalLink className="w-3 h-3 mr-1 flex-shrink-0" />
+                        {resource.data.url}
+                      </div>
                     )}
                     
-                    <div className="text-xs text-gray-400">
-                      生成时间: {formatDate(chart.timestamp)}
-                    </div>
+                    {resource.type === 'database' && resource.data.tables && (
+                      <div className="text-xs text-gray-400">
+                        表数量: {resource.data.tables.length}
+                      </div>
+                    )}
+                    
+                    {resource.type === 'api' && resource.data.method && resource.data.endpoint && (
+                      <div className="text-xs text-gray-400 font-mono">
+                        {resource.data.method} {resource.data.endpoint}
+                      </div>
+                    )}
+                    
+                    {resource.type === 'file' && (
+                      <div className="flex items-center space-x-1 text-xs text-gray-400">
+                        <Download className="w-3 h-3" />
+                        <span>{resource.data.size}</span>
+                      </div>
+                    )}
                   </div>
-                  
-                  <div className="flex items-center space-x-1 ml-2">
-                    <button 
-                      className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
-                      title="预览图表"
-                    >
-                      <Eye className="w-3 h-3 text-gray-400" />
-                    </button>
-                    <button 
-                      onClick={() => {
-                        if (chart.imageUrl) {
-                          const link = document.createElement('a');
-                          link.href = chart.imageUrl;
-                          link.download = `${chart.title}.png`;
-                          link.click();
-                        }
-                      }}
-                      className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
-                      title="下载图表"
-                    >
-                      <Download className="w-3 h-3 text-gray-400" />
-                    </button>
+
+                  {/* 时间戳 */}
+                  <div className="flex items-center space-x-1 mt-2 text-xs text-gray-400">
+                    <Clock className="w-3 h-3" />
+                    <span>{formatTime(resource.timestamp)}</span>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
-      {/* 文件部分 */}
-      {taskContext?.files && taskContext.files.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-medium text-gray-900 dark:text-white flex items-center space-x-2">
-              <FileText className="w-4 h-4" />
-              <span>生成文件</span>
-            </h3>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              {taskContext.files?.length || 0} 个文件
-            </span>
-          </div>
-          
-          <div className="space-y-3">
-            {taskContext.files?.map((file: FileResource) => (
-              <div key={file.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2 mb-1">
-                      {getFileTypeIcon(file.type)}
-                      <h4 className="font-medium text-gray-900 dark:text-white text-sm truncate">
-                        {file.name}
-                      </h4>
-                    </div>
-                    
-                    <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
-                      <span>{file.type}</span>
-                      <span>{file.size}</span>
-                      <span>{formatDate(file.timestamp)}</span>
-                    </div>
-                  </div>
+                {/* 操作按钮 */}
+                <div className="flex items-center space-x-1 ml-2">
+                  {resource.type === 'web' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open(resource.data.url, '_blank');
+                      }}
+                      className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
+                      title="打开链接"
+                    >
+                      <ExternalLink className="w-3 h-3 text-gray-400" />
+                    </button>
+                  )}
                   
-                  <div className="flex items-center space-x-1 ml-2">
-                    <button 
-                      onClick={() => {
-                        const link = document.createElement('a');
-                        link.href = file.downloadUrl;
-                        link.download = file.name;
-                        link.click();
+                  {resource.type === 'file' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open(resource.data.downloadUrl, '_blank');
                       }}
                       className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
                       title="下载文件"
                     >
                       <Download className="w-3 h-3 text-gray-400" />
                     </button>
-                  </div>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 空状态 */}
-      {(!taskContext?.charts || taskContext.charts.length === 0) && 
-       (!taskContext?.files || taskContext.files.length === 0) && (
-        <div className="text-center text-gray-500 dark:text-gray-400 py-8">
-          <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
-          <p>暂无资源</p>
-          <p className="text-sm">当前任务未生成图表或文件</p>
-        </div>
-      )}
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
-}; 
+});
+
+export default ResourcesTab; 

@@ -4,13 +4,13 @@ import { httpClient } from '../utils/httpClient';
 // 认证服务类
 class AuthService {
   // 用户登录
-  async login(credentials: LoginRequest): Promise<AuthResponse> {
+  async login(credentials: LoginRequest, remember: boolean = false): Promise<AuthResponse> {
     try {
       const response = await api.auth.login(credentials);
       
       if (response.success && response.data) {
-        // 保存认证信息
-        this.saveAuthData(response.data);
+        // 保存认证信息，支持记住我功能
+        this.saveAuthData(response.data, remember);
         return response.data;
       }
       
@@ -110,17 +110,18 @@ class AuthService {
 
   // 获取访问token
   getAccessToken(): string | null {
-    return localStorage.getItem('access_token');
+    // 优先从localStorage获取，如果没有则从sessionStorage获取
+    return localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
   }
 
   // 获取刷新token
   getRefreshToken(): string | null {
-    return localStorage.getItem('refresh_token');
+    return localStorage.getItem('refresh_token') || sessionStorage.getItem('refresh_token');
   }
 
   // 获取用户信息
   getUserInfo(): UserInfo | null {
-    const userStr = localStorage.getItem('user_info');
+    const userStr = localStorage.getItem('user_info') || sessionStorage.getItem('user_info');
     if (!userStr) {
       return null;
     }
@@ -133,10 +134,21 @@ class AuthService {
   }
 
   // 保存认证数据
-  private saveAuthData(authData: AuthResponse): void {
-    localStorage.setItem('access_token', authData.access_token);
-    localStorage.setItem('refresh_token', authData.refresh_token);
-    localStorage.setItem('user_info', JSON.stringify(authData.user));
+  private saveAuthData(authData: AuthResponse, remember: boolean = false): void {
+    const storage = remember ? localStorage : sessionStorage;
+    
+    // 保存到对应的存储中
+    storage.setItem('access_token', authData.access_token);
+    storage.setItem('refresh_token', authData.refresh_token);
+    storage.setItem('user_info', JSON.stringify(authData.user));
+    storage.setItem('login_time', Date.now().toString());
+    
+    // 如果选择记住我，也在localStorage中保存一个标记
+    if (remember) {
+      localStorage.setItem('remember_me', 'true');
+    } else {
+      localStorage.removeItem('remember_me');
+    }
     
     // 设置token到HTTP客户端
     httpClient.setAuthToken(authData.access_token);
@@ -145,10 +157,19 @@ class AuthService {
 
   // 清除认证数据
   private clearAuthData(): void {
+    // 清除localStorage中的认证数据
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user_info');
     localStorage.removeItem('returnUrl');
+    localStorage.removeItem('remember_me');
+    localStorage.removeItem('login_time');
+    
+    // 清除sessionStorage中的认证数据
+    sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('refresh_token');
+    sessionStorage.removeItem('user_info');
+    sessionStorage.removeItem('login_time');
     
     // 清除HTTP客户端的token
     httpClient.clearAuthToken();

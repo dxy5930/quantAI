@@ -43,7 +43,7 @@ const LoginPage: React.FC = observer(() => {
     e.preventDefault();
     
     try {
-      await userStore.login();
+      await userStore.login(undefined, rememberMe);
       appStore.showSuccess('登录成功！', '欢迎回来');
       
       // 获取返回URL并跳转

@@ -33,10 +33,11 @@ async function bootstrap() {
 
   // 启用CORS - 允许所有域名跨域
   app.enableCors({
-    origin: '*',
-    credentials: false, // 当origin为*时，credentials必须为false
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    origin: true, // 允许所有域名
+    credentials: true, // 允许携带cookie
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+    exposedHeaders: ['Authorization'],
   });
 
   // 全局验证管道

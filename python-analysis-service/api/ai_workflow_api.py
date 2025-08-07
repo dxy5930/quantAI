@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Dict, List, Optional, Any
+from sqlalchemy.orm import Session
 import asyncio
 import uuid
 from datetime import datetime
@@ -15,6 +16,12 @@ from services.qwen_analyzer import QwenAnalyzer
 from services.stock_recommender import StockRecommender
 from services.smart_stock_service import SmartStockService
 from services.database_service import DatabaseService
+from models.database import get_db
+from models.workflow_models import (
+    WorkflowInstance, WorkflowStep, WorkflowMessage, WorkflowResource,
+    WorkflowStatus, StepStatus, StepCategory, ResourceTypeEnum, 
+    MessageType, WorkflowResourceType
+)
 from utils.helpers import clean_text
 
 router = APIRouter(prefix="/api/v1", tags=["AI Workflow"])
@@ -356,7 +363,9 @@ async def analyze_chat_message(request: ChatMessageRequest):
 async def stream_chat_message(
     message: str,
     conversation_id: str = None,
-    context: str = "{}"
+    context: str = "{}",
+    workflow_id: str = None,  # 新增：直接接收工作流ID
+    db: Session = Depends(get_db)
 ):
     """流式对话接口 - 分段式输出AI回复"""
     try:
@@ -366,11 +375,11 @@ async def stream_chat_message(
             context_dict = json.loads(context) if context else {}
         except:
             context_dict = {}
-        
+
         # 初始化对话历史
         if conversation_id not in conversation_storage:
             conversation_storage[conversation_id] = []
-        
+
         # 添加用户消息
         user_message = {
             "id": f"msg_{uuid.uuid4()}",
@@ -379,38 +388,45 @@ async def stream_chat_message(
             "timestamp": datetime.now().isoformat()
         }
         conversation_storage[conversation_id].append(user_message)
-        
+
         # 创建AI消息ID
         ai_message_id = f"msg_{uuid.uuid4()}"
-        
+
         async def generate_streaming_response():
             """生成流式响应"""
             try:
-                # 1. 发送开始信号
-                yield f"data: {json.dumps({'type': 'start', 'messageId': ai_message_id, 'conversationId': conversation_id})}\n\n"
+                # 1. 发送开始信号 - 立即发送，确保前端能收到
+                yield f"data: {json.dumps({'type': 'start', 'messageId': ai_message_id})}\n\n"
+                
+                # 短暂延迟确保start事件被处理
                 await asyncio.sleep(0.1)
                 
-                # 1.5. 生成并发送任务信息
-                task_title, task_description = generate_task_title_and_description(message)
-                yield f"data: {json.dumps({'type': 'task_info', 'taskTitle': task_title, 'taskDescription': task_description, 'messageId': ai_message_id})}\n\n"
-                await asyncio.sleep(0.2)
-                
-                # 2. 判断消息类型并生成相应的分段响应
+                # 2. 基于消息内容路由到不同的处理逻辑
                 message_lower = message.lower()
                 context = context_dict
                 
-                if any(keyword in message_lower for keyword in ['分析', '股票', '投资', '市场']):
-                    # 股票分析相关的分段响应
-                    async for chunk in generate_analysis_stream(message, context):
-                        yield chunk
-                elif any(keyword in message_lower for keyword in ['策略', '建议', '推荐']):
-                    # 策略建议相关的分段响应
-                    async for chunk in generate_strategy_stream(message, context):
-                        yield chunk
-                else:
-                    # 通用对话的分段响应
-                    async for chunk in generate_general_stream(message, context):
-                        yield chunk
+                # 添加超时保护，避免长时间阻塞
+                try:
+                    if any(keyword in message_lower for keyword in ['分析', '股票', '投资', '市场']):
+                        # 股票分析相关的分段响应
+                        async for chunk in generate_analysis_stream(message, context):
+                            yield chunk
+                    elif any(keyword in message_lower for keyword in ['策略', '建议', '推荐']):
+                        # 策略建议相关的分段响应
+                        async for chunk in generate_strategy_stream(message, context):
+                            yield chunk
+                    else:
+                        # 通用对话的分段响应
+                        async for chunk in generate_general_stream(message, context):
+                            yield chunk
+                except asyncio.TimeoutError:
+                    # 超时处理
+                    yield f"data: {json.dumps({'type': 'error', 'error': '响应超时，请稍后重试'})}\n\n"
+                    return
+                except Exception as stream_error:
+                    # 流式处理错误
+                    yield f"data: {json.dumps({'type': 'error', 'error': f'处理失败: {str(stream_error)}'})}\n\n"
+                    return
                 
                 # 3. 发送完成信号
                 yield f"data: {json.dumps({'type': 'complete', 'messageId': ai_message_id})}\n\n"
@@ -970,25 +986,23 @@ def generate_fallback_response(message: str):
 
 async def generate_analysis_stream(message: str, context: Dict[str, Any]):
     """生成股票分析的流式响应"""
-    # 根据消息内容动态生成步骤
-    analysis_steps = [
-        "正在思考...",
-        "正在思考...", 
-        "正在思考...",
-        "正在思考...",
-        "正在思考..."
-    ]
+    
+    # 使用AI智能生成分析步骤
+    analysis_steps = await generate_smart_analysis_steps(message, context)
     
     category = determine_step_category_from_message(message)
     
-    for i, step_content in enumerate(analysis_steps):
-        # 智能判断resourceType和results
+    for i, step_info in enumerate(analysis_steps):
         step_context = {
             'step_number': i + 1,
             'user_message': message,
             **(context or {})
         }
-        resource_type, results = determine_resource_type_from_content(step_content, step_context)
+        
+        # 从AI生成的步骤信息中提取资源类型和结果
+        resource_type = step_info.get('resourceType', 'general')
+        results = step_info.get('results', [])
+        step_content = step_info.get('content', f'执行步骤 {i+1}')
         
         step_data = {
             'type': 'progress', 
@@ -998,7 +1012,10 @@ async def generate_analysis_stream(message: str, context: Dict[str, Any]):
             'stepId': f'step_{i+1}', 
             'category': category,
             'resourceType': resource_type,
-            'results': results
+            'results': results,
+            'executionDetails': step_info.get('executionDetails', {}),
+            'urls': step_info.get('urls', []),
+            'files': step_info.get('files', [])
         }
         yield f"data: {json.dumps(step_data)}\n\n"
         
@@ -1023,13 +1040,23 @@ async def generate_analysis_stream(message: str, context: Dict[str, Any]):
 请提供专业、详细的分析，并给出具体可操作的建议。
 """
         
-        # 调用通义千问API - 异步处理，避免长时间阻塞
-        ai_response = await asyncio.get_event_loop().run_in_executor(
-            None, 
-            lambda: qwen_analyzer.analyze_text(analysis_prompt, max_tokens=2000)
-        )
+        # 调用通义千问API - 添加超时保护
+        try:
+            ai_response = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(
+                    None, 
+                    lambda: qwen_analyzer.analyze_text(analysis_prompt, max_tokens=2000)
+                ),
+                timeout=30.0  # 30秒超时
+            )
+        except asyncio.TimeoutError:
+            print("通义千问分析API超时，使用降级回复")
+            ai_response = None
+        except Exception as api_error:
+            print(f"通义千问分析API调用失败: {api_error}")
+            ai_response = None
         
-        if ai_response:
+        if ai_response and ai_response.strip():
             # 将AI回复分段输出，每段间隔更短
             analysis_parts = ai_response.split('\n\n')
             
@@ -1042,55 +1069,35 @@ async def generate_analysis_stream(message: str, context: Dict[str, Any]):
                     await asyncio.sleep(0.05)  # 空行间隔很短
         else:
             # 降级回复
-            fallback_parts = [
-                f"基于您的问题「{message}」，我为您进行了全面的市场分析。",
-                "",
-                "📊 **市场概况分析**",
-                "当前市场处于震荡调整阶段，整体估值相对合理。科技股和新能源板块仍有较好的长期投资价值。",
-                "",
-                "📈 **技术面分析**", 
-                "从技术指标来看，主要指数已经在重要支撑位附近获得支撑，短期有望形成反弹。建议关注成交量变化。",
-                "",
-                "💰 **投资建议**",
-                "1. 短期内保持谨慎，关注市场情绪变化",
-                "2. 中长期看好优质龙头企业",
-                "3. 建议分批建仓，控制仓位风险"
-            ]
-            
-            for part in fallback_parts:
-                if part.strip():
-                    yield f"data: {json.dumps({'type': 'content', 'content': part, 'stepId': 'fallback_analysis', 'category': 'result'})}\n\n"
-                    await asyncio.sleep(0.2)  # 减少间隔
-                else:
-                    yield f"data: {json.dumps({'type': 'content', 'content': part, 'stepId': 'fallback_analysis'})}\n\n"
-                    await asyncio.sleep(0.05)
-                    
+            fallback_response = generate_fallback_analysis_response(message)
+            yield f"data: {json.dumps({'type': 'content', 'content': fallback_response, 'stepId': 'fallback_analysis'})}\n\n"
+
+
     except Exception as e:
-        logger.error(f"通义千问分析失败: {e}")
-        error_msg = "抱歉，AI分析服务暂时遇到问题，请稍后重试。"
+        print(f"生成分析回复失败: {e}")
+        error_msg = "抱歉，分析服务暂时不可用。请稍后重试，或者提供更具体的分析需求。"
+
         yield f"data: {json.dumps({'type': 'content', 'content': error_msg, 'stepId': 'error', 'category': 'error'})}\n\n"
 
 async def generate_strategy_stream(message: str, context: Dict[str, Any]):
     """生成投资策略的流式响应"""
-    # 根据消息内容动态生成策略步骤
-    strategy_steps = [
-        "正在思考...",
-        "正在思考...",
-        "正在思考...",
-        "正在思考...",
-        "正在思考..."
-    ]
+    
+    # 使用AI智能生成策略步骤
+    strategy_steps = await generate_smart_strategy_steps(message, context)
     
     category = determine_step_category_from_message(message)
     
-    for i, step_content in enumerate(strategy_steps):
-        # 智能判断resourceType和results
+    for i, step_info in enumerate(strategy_steps):
         step_context = {
             'step_number': i + 1,
             'user_message': message,
             **(context or {})
         }
-        resource_type, results = determine_resource_type_from_content(step_content, step_context)
+        
+        # 从AI生成的步骤信息中提取资源类型和结果
+        resource_type = step_info.get('resourceType', 'general')
+        results = step_info.get('results', [])
+        step_content = step_info.get('content', f'执行步骤 {i+1}')
         
         step_data = {
             'type': 'progress', 
@@ -1100,36 +1107,49 @@ async def generate_strategy_stream(message: str, context: Dict[str, Any]):
             'stepId': f'strategy_step_{i+1}', 
             'category': category,
             'resourceType': resource_type,
-            'results': results
+            'results': results,
+            'executionDetails': step_info.get('executionDetails', {}),
+            'urls': step_info.get('urls', []),
+            'files': step_info.get('files', [])
         }
         yield f"data: {json.dumps(step_data)}\n\n"
         await asyncio.sleep(0.4)  # 减少延迟
     
     # 使用通义千问生成策略内容
     try:
+        # 构建策略提示词
         strategy_prompt = f"""
-请作为资深投资策略师，针对用户的策略需求制定投资方案：
+请作为专业的投资策略顾问，针对用户的需求制定投资策略：
 
 用户需求：{message}
 
 请提供以下内容：
-1. 投资目标分析
-2. 风险偏好评估
-3. 具体的资产配置建议（包括比例）
-4. 推荐的投资品种和理由
-5. 风险控制措施
-6. 预期收益和时间周期
+1. 策略概述和核心思路
+2. 具体的操作建议
+3. 风险控制措施
+4. 预期收益和时间周期
+5. 实施建议和注意事项
 
-请给出专业、具体、可操作的投资策略。
+请确保策略具有可操作性和实用性。
 """
         
-        # 异步调用AI服务
-        ai_response = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: qwen_analyzer.analyze_text(strategy_prompt, max_tokens=2000)
-        )
+        # 调用通义千问API - 添加超时保护
+        try:
+            ai_response = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(
+                    None, 
+                    lambda: qwen_analyzer.analyze_text(strategy_prompt, max_tokens=2000)
+                ),
+                timeout=30.0  # 30秒超时
+            )
+        except asyncio.TimeoutError:
+            print("通义千问策略API超时，使用降级回复")
+            ai_response = None
+        except Exception as api_error:
+            print(f"通义千问策略API调用失败: {api_error}")
+            ai_response = None
         
-        if ai_response:
+        if ai_response and ai_response.strip():
             # 将AI回复分段输出
             strategy_parts = ai_response.split('\n\n')
             
@@ -1141,58 +1161,36 @@ async def generate_strategy_stream(message: str, context: Dict[str, Any]):
                     yield f"data: {json.dumps({'type': 'content', 'content': '', 'stepId': 'ai_strategy'})}\n\n"
                     await asyncio.sleep(0.05)
         else:
-            # 降级策略回复
-            fallback_parts = [
-                f"根据您的咨询「{message}」，我为您制定了以下投资策略：",
-                "",
-                "🎯 **投资目标**",
-                "在控制风险的前提下，追求稳健的资产增值，预期年化收益率12-18%。",
-                "",
-                "📋 **资产配置建议**",
-                "• 60% 优质蓝筹股（银行、消费、医药）",
-                "• 25% 成长性科技股（新能源、人工智能）", 
-                "• 10% 债券基金（提供稳定收益）",
-                "• 5% 现金储备（应对市场机会）",
-                "",
-                "⚠️ **风险控制**",
-                "• 单只股票持仓不超过总资产的10%",
-                "• 设置止损位，单笔亏损不超过5%",
-                "• 定期评估和调整持仓结构"
-            ]
-            
-            for part in fallback_parts:
-                if part.strip():
-                    yield f"data: {json.dumps({'type': 'content', 'content': part, 'stepId': 'fallback_strategy', 'category': 'result'})}\n\n"
-                    await asyncio.sleep(0.3)
-                else:
-                    yield f"data: {json.dumps({'type': 'content', 'content': part, 'stepId': 'fallback_strategy'})}\n\n"
-                    await asyncio.sleep(0.05)
-                    
+            # 降级回复
+            fallback_response = generate_fallback_strategy_response(message)
+            yield f"data: {json.dumps({'type': 'content', 'content': fallback_response, 'stepId': 'fallback_strategy'})}\n\n"
+
+
     except Exception as e:
-        logger.error(f"策略生成失败: {e}")
-        error_msg = "抱歉，策略生成服务暂时遇到问题，请稍后重试。"
+        print(f"生成策略回复失败: {e}")
+        error_msg = "抱歉，策略服务暂时不可用。请稍后重试，或者提供更具体的策略需求。"
+
         yield f"data: {json.dumps({'type': 'content', 'content': error_msg, 'stepId': 'error', 'category': 'error'})}\n\n"
 
 async def generate_general_stream(message: str, context: Dict[str, Any]):
     """生成通用对话的流式响应"""
-    # 根据消息内容动态生成通用步骤
-    general_steps = [
-        "正在思考...", 
-        "正在思考...",
-        "正在思考...",
-        "正在思考..."
-    ]
+    
+    # 使用AI智能生成通用步骤
+    general_steps = await generate_smart_general_steps(message, context)
     
     category = determine_step_category_from_message(message)
     
-    for i, step_content in enumerate(general_steps):
-        # 智能判断resourceType和results
+    for i, step_info in enumerate(general_steps):
         step_context = {
             'step_number': i + 1,
             'user_message': message,
             **(context or {})
         }
-        resource_type, results = determine_resource_type_from_content(step_content, step_context)
+        
+        # 从AI生成的步骤信息中提取资源类型和结果
+        resource_type = step_info.get('resourceType', 'general')
+        results = step_info.get('results', [])
+        step_content = step_info.get('content', f'执行步骤 {i+1}')
         
         step_data = {
             'type': 'progress', 
@@ -1202,71 +1200,854 @@ async def generate_general_stream(message: str, context: Dict[str, Any]):
             'stepId': f'general_step_{i+1}', 
             'category': category,
             'resourceType': resource_type,
-            'results': results
+            'results': results,
+            'executionDetails': step_info.get('executionDetails', {}),
+            'urls': step_info.get('urls', []),
+            'files': step_info.get('files', [])
         }
         yield f"data: {json.dumps(step_data)}\n\n"
         await asyncio.sleep(0.3)  # 减少延迟
     
-    # 使用通义千问生成通用回复
+    # 使用通义千问生成通用回复 - 添加超时和降级机制
     try:
+        # 构建通用对话提示词
         general_prompt = f"""
-请作为专业的AI投资助手，回答用户的问题：
+请作为AI助手，针对用户的问题提供专业、有用的回答：
 
 用户问题：{message}
 
 请提供：
 1. 对问题的理解和分析
-2. 相关的投资知识或市场信息
-3. 实用的建议或指导
-4. 如果需要，提供进一步咨询的方向
+2. 详细的解答或建议
+3. 相关的补充信息
+4. 后续可能需要的行动建议
 
-请保持专业、友好、有帮助的语调。
+请确保回答准确、有用且易于理解。
 """
         
-        # 异步调用AI服务
-        ai_response = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: qwen_analyzer.analyze_text(general_prompt, max_tokens=1500)
-        )
+        # 调用通义千问API - 添加超时保护
+        try:
+            ai_response = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(
+                    None, 
+                    lambda: qwen_analyzer.analyze_text(general_prompt, max_tokens=1500)
+                ),
+                timeout=30.0  # 30秒超时
+            )
+        except asyncio.TimeoutError:
+            print("通义千问API超时，使用降级回复")
+            ai_response = None
+        except Exception as api_error:
+            print(f"通义千问API调用失败: {api_error}")
+            ai_response = None
         
-        if ai_response:
+        if ai_response and ai_response.strip():
             # 将AI回复分段输出
-            response_parts = ai_response.split('\n\n')
+            general_parts = ai_response.split('\n\n')
             
-            for part in response_parts:
+            for part in general_parts:
                 if part.strip():
                     yield f"data: {json.dumps({'type': 'content', 'content': part.strip(), 'stepId': 'ai_general', 'category': 'result'})}\n\n"
-                    await asyncio.sleep(0.25)  # 更快的响应
+                    await asyncio.sleep(0.3)
                 else:
                     yield f"data: {json.dumps({'type': 'content', 'content': '', 'stepId': 'ai_general'})}\n\n"
                     await asyncio.sleep(0.05)
         else:
-            # 降级通用回复
-            fallback_parts = [
-                f"感谢您的提问！关于「{message}」，",
-                "",
-                "我理解您想了解相关的投资信息。作为您的AI投资助手，我可以为您提供：",
-                "",
-                "💡 **市场分析** - 实时的市场动态和趋势分析",
-                "📊 **数据解读** - 专业的财务数据和技术指标解读", 
-                "🎯 **投资建议** - 个性化的投资策略和风险提示",
-                "📈 **组合管理** - 资产配置和投资组合优化建议",
-                "",
-                "如果您有具体的投资问题，欢迎随时咨询。我会根据最新的市场情况为您提供专业的分析和建议。"
-            ]
-            
-            for part in fallback_parts:
-                if part.strip():
-                    yield f"data: {json.dumps({'type': 'content', 'content': part, 'stepId': 'fallback_general', 'category': 'result'})}\n\n"
-                    await asyncio.sleep(0.25)
-                else:
-                    yield f"data: {json.dumps({'type': 'content', 'content': part, 'stepId': 'fallback_general'})}\n\n"
-                    await asyncio.sleep(0.05)
-                    
+            # 降级回复 - 提供更有用的内容
+            fallback_response = generate_fallback_general_response(message)
+            yield f"data: {json.dumps({'type': 'content', 'content': fallback_response, 'stepId': 'fallback_general'})}\n\n"
+                
     except Exception as e:
-        logger.error(f"通用回复生成失败: {e}")
-        error_msg = "抱歉，AI助手暂时遇到问题，请稍后重试。我会尽快为您提供帮助。"
+        print(f"生成AI回复失败: {e}")
+        error_msg = "抱歉，AI分析服务暂时不可用。请稍后重试，或者提供更具体的问题描述。"
+
         yield f"data: {json.dumps({'type': 'content', 'content': error_msg, 'stepId': 'error', 'category': 'error'})}\n\n"
+
+def generate_fallback_general_response(message: str) -> str:
+    """生成降级的通用回复"""
+    message_lower = message.lower()
+    
+    if any(keyword in message_lower for keyword in ['股票', '投资', '基金', '理财']):
+        return f"""感谢您关于"{message}"的咨询。
+
+我理解您对投资理财方面的关注，建议您可以：
+
+1. **深入研究**: 查看相关公司的财务报表和行业分析
+2. **风险评估**: 了解投资产品的风险等级和自己的风险承受能力  
+3. **专业咨询**: 咨询专业的投资顾问获取个性化建议
+4. **分散投资**: 不要把所有资金投入单一标的
+
+请注意投资有风险，决策需谨慎。建议在充分了解的基础上做出投资选择。"""
+    
+    elif any(keyword in message_lower for keyword in ['数据', '分析', '查询']):
+        return f"""关于您提到的"{message}"，我来为您提供一些分析思路：
+
+1. **数据收集**: 首先明确需要什么类型的数据
+2. **数据验证**: 确保数据的准确性和时效性
+3. **分析方法**: 选择合适的分析工具和方法
+4. **结果解读**: 正确理解分析结果的含义
+
+如果您需要更具体的帮助，请提供更多详细信息，我将为您提供更精准的建议。"""
+    
+    else:
+        return f"""感谢您的问题："{message}"
+
+我理解您的需求，建议您可以：
+
+1. **明确目标**: 进一步明确您想要解决的具体问题
+2. **收集信息**: 查找相关的资料和数据
+3. **多方咨询**: 寻求专业人士的意见和建议
+4. **实践验证**: 通过实际操作来验证方案的可行性
+
+如果您能提供更多背景信息，我将能够为您提供更有针对性的帮助。"""
+
+# 新增：AI智能步骤生成函数
+async def generate_smart_analysis_steps(message: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """使用AI智能生成分析步骤"""
+    try:
+        # 构建步骤生成提示词
+        step_prompt = f"""
+作为专业的投资分析AI助手，请根据用户问题的复杂程度，设计合适数量的执行步骤（通常2-6个步骤）：
+
+用户问题：{message}
+
+请分析问题复杂度并决定步骤数量：
+- 简单问题（如单一概念解释）：2-3个步骤
+- 中等复杂度（如单只股票分析）：3-4个步骤  
+- 复杂问题（如行业分析、策略制定）：4-6个步骤
+
+每个步骤必须包含：
+1. content: 具体的执行描述（明确说明要做什么，不要用"正在思考"等模糊词汇）
+2. resourceType: browser（网络搜索）/database（数据查询）/api（AI分析）/general（通用处理）
+3. results: 该步骤的预期产出
+4. executionDetails: 执行的技术细节
+5. urls: 相关链接（通常为空数组）
+6. files: 相关文件（通常为空数组）
+
+请以JSON数组格式返回，根据问题实际需要确定步骤数量：
+
+[
+  {{
+    "content": "获取股票基础信息和财务数据",
+    "resourceType": "database", 
+    "results": ["基本信息", "财务指标"],
+    "executionDetails": {{"dataSource": "股票数据库", "queryType": "基础数据"}},
+    "urls": [],
+    "files": []
+  }}
+]
+"""
+        
+        # 调用AI生成步骤
+        ai_response = await asyncio.get_event_loop().run_in_executor(
+            None, 
+            lambda: qwen_analyzer.analyze_text(step_prompt, max_tokens=1000)
+        )
+        
+        if ai_response:
+            try:
+                # 尝试解析JSON响应
+                import re
+                json_match = re.search(r'\[.*\]', ai_response, re.DOTALL)
+                if json_match:
+                    steps_data = json.loads(json_match.group())
+                    return steps_data
+            except:
+                pass
+        
+        # 根据用户问题生成更具体的默认分析步骤
+        user_msg_lower = message.lower()
+        
+        # 分析问题复杂度
+        def get_complexity_level():
+            # 简单问题标识
+            simple_indicators = ['是什么', '定义', '解释', '概念', '简单']
+            # 复杂问题标识  
+            complex_indicators = ['行业', '板块', '比较', '策略', '组合', '深度', '全面', '详细']
+            
+            if any(indicator in user_msg_lower for indicator in simple_indicators):
+                return 'simple'  # 2-3步
+            elif any(indicator in user_msg_lower for indicator in complex_indicators):
+                return 'complex'  # 4-6步
+            else:
+                return 'medium'   # 3-4步
+        
+        complexity = get_complexity_level()
+        
+        # 检测用户问题类型，生成针对性的步骤
+        if any(keyword in user_msg_lower for keyword in ['股票', '代码', '000', '300', '600']):
+            # 股票分析类步骤
+            if complexity == 'simple':
+                # 简单股票查询：2-3步
+                return [
+                    {
+                        "content": f"查询股票基本信息：{message[:20]}...",
+                        "resourceType": "database",
+                        "results": ["股票基本面", "实时价格"],
+                        "executionDetails": {"taskType": "股票查询", "complexity": "简单"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "AI生成简要分析结论",
+                        "resourceType": "api",
+                        "results": ["基础评估", "简要建议"],
+                        "executionDetails": {"engine": "通义千问", "analysisType": "快速分析"},
+                        "urls": [],
+                        "files": []
+                    }
+                ]
+            elif complexity == 'complex':
+                # 深度股票分析：5-6步
+                return [
+                    {
+                        "content": f"全面解析分析需求：{message[:20]}...",
+                        "resourceType": "general",
+                        "results": ["需求框架", "分析维度"],
+                        "executionDetails": {"taskType": "股票深度分析", "complexity": "复杂"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "获取股票基础数据和财务指标",
+                        "resourceType": "database",
+                        "results": ["基本信息", "财务数据", "历史价格"],
+                        "executionDetails": {"dataSource": "股票数据库", "scope": "全面数据"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "搜索相关新闻和市场动态",
+                        "resourceType": "browser",
+                        "results": ["最新新闻", "行业动态", "市场情绪"],
+                        "executionDetails": {"source": "财经媒体", "focus": "实时资讯"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "AI深度技术和基本面分析",
+                        "resourceType": "api",
+                        "results": ["技术指标", "财务分析", "估值模型"],
+                        "executionDetails": {"engine": "通义千问", "analysisType": "深度分析"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "生成详细投资建议报告",
+                        "resourceType": "general",
+                        "results": ["投资评级", "目标价位", "风险提示", "操作建议"],
+                        "executionDetails": {"reportType": "深度分析报告"},
+                        "urls": [],
+                        "files": []
+                    }
+                ]
+            else:
+                # 中等复杂度：3-4步
+                return [
+                    {
+                        "content": f"解析查询需求：{message[:20]}...",
+                        "resourceType": "general",
+                        "results": ["需求理解", "分析框架"],
+                        "executionDetails": {"taskType": "股票分析", "complexity": "中等"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "查询股票基础信息和实时行情数据",
+                        "resourceType": "database",
+                        "results": ["股票基本面", "实时价格", "成交量"],
+                        "executionDetails": {"dataSource": "股票数据库", "queryType": "实时数据"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "调用AI引擎进行智能分析",
+                        "resourceType": "api",
+                        "results": ["技术指标", "趋势分析", "AI评分"],
+                        "executionDetails": {"engine": "通义千问", "analysisType": "技术+基本面"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "整合分析数据，生成投资建议报告",
+                        "resourceType": "general",
+                        "results": ["综合评级", "投资建议", "风险提示"],
+                        "executionDetails": {"reportType": "综合分析报告"},
+                        "urls": [],
+                        "files": []
+                    }
+                ]
+        elif any(keyword in user_msg_lower for keyword in ['板块', '行业', '领域']):
+            # 行业板块分析步骤（复杂度天然较高）
+            if complexity == 'simple':
+                # 简单行业概览：2-3步
+                return [
+                    {
+                        "content": f"识别行业基本信息：{message[:20]}...",
+                        "resourceType": "general", 
+                        "results": ["行业定位", "基本概况"],
+                        "executionDetails": {"taskType": "行业概览", "complexity": "简单"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "AI生成行业基础分析",
+                        "resourceType": "api",
+                        "results": ["行业特点", "基本前景"],
+                        "executionDetails": {"engine": "通义千问", "analysisType": "行业概览"},
+                        "urls": [],
+                        "files": []
+                    }
+                ]
+            else:
+                # 中等复杂度以上：4-6步
+                steps = [
+                    {
+                        "content": f"识别分析目标：{message[:20]}...",
+                        "resourceType": "general", 
+                        "results": ["行业定位", "分析范围"],
+                        "executionDetails": {"taskType": "行业分析", "complexity": complexity},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "搜索行业相关信息和最新动态",
+                        "resourceType": "browser",
+                        "results": ["行业新闻", "政策动向", "市场热点"],
+                        "executionDetails": {"source": "财经网站", "keywords": "行业分析"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "获取行业内重点股票数据",
+                        "resourceType": "database",
+                        "results": ["龙头股票", "行业指数", "板块资金流向"],
+                        "executionDetails": {"dataSource": "行业数据库"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "AI深度分析行业投资价值",
+                        "resourceType": "api",
+                        "results": ["行业前景", "投资机会", "风险因素"],
+                        "executionDetails": {"engine": "通义千问", "focus": "行业投资价值"},
+                        "urls": [],
+                        "files": []
+                    }
+                ]
+                
+                # 复杂分析增加额外步骤
+                if complexity == 'complex':
+                    steps.extend([
+                        {
+                            "content": "分析行业竞争格局和产业链",
+                            "resourceType": "database",
+                            "results": ["竞争格局", "产业链分析", "供需关系"],
+                            "executionDetails": {"dataSource": "产业数据库", "scope": "全产业链"},
+                            "urls": [],
+                            "files": []
+                        },
+                        {
+                            "content": "生成行业投资策略和配置建议",
+                            "resourceType": "general",
+                            "results": ["投资策略", "标的推荐", "配置权重", "时机判断"],
+                            "executionDetails": {"reportType": "行业投资策略报告"},
+                            "urls": [],
+                            "files": []
+                        }
+                    ])
+                return steps
+        elif any(keyword in user_msg_lower for keyword in ['策略', '配置', '组合']):
+            # 投资策略制定步骤
+            return [
+                {
+                    "content": f"分析投资需求：{message[:20]}...",
+                    "resourceType": "general",
+                    "results": ["投资目标", "风险偏好"],
+                    "executionDetails": {"taskType": "策略制定"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "调研市场环境和投资机会",
+                    "resourceType": "browser",
+                    "results": ["市场趋势", "热点机会", "专家观点"],
+                    "executionDetails": {"source": "财经媒体", "focus": "投资机会"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "构建量化分析模型",
+                    "resourceType": "api",
+                    "results": ["量化指标", "风险评估", "收益预测"],
+                    "executionDetails": {"model": "量化分析", "method": "AI建模"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "制定个性化投资策略方案",
+                    "resourceType": "general",
+                    "results": ["策略方案", "配置建议", "执行计划"],
+                    "executionDetails": {"deliverable": "策略报告"},
+                    "urls": [],
+                    "files": []
+                }
+            ]
+        else:
+            # 通用投资咨询步骤
+            return [
+                {
+                    "content": f"理解咨询问题：{message[:20]}...",
+                    "resourceType": "general",
+                    "results": ["问题分析", "咨询方向"],
+                    "executionDetails": {"taskType": "投资咨询"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "收集相关市场信息",
+                    "resourceType": "browser",
+                    "results": ["市场资讯", "专业观点"],
+                    "executionDetails": {"source": "财经资讯"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "运用AI智能分析引擎",
+                    "resourceType": "api",
+                    "results": ["智能分析", "专业建议"],
+                    "executionDetails": {"engine": "通义千问"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "提供专业投资咨询答案",
+                    "resourceType": "general",
+                    "results": ["专业解答", "实用建议"],
+                    "executionDetails": {"deliverable": "咨询报告"},
+                    "urls": [],
+                    "files": []
+                }
+            ]
+        
+    except Exception as e:
+        print(f"AI步骤生成失败: {e}")
+        # 返回默认步骤
+        return [
+            {
+                "content": "开始数据分析",
+                "resourceType": "general",
+                "results": [],
+                "executionDetails": {},
+                "urls": [],
+                "files": []
+            }
+        ]
+
+async def generate_smart_strategy_steps(message: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """使用AI智能生成策略步骤"""
+    try:
+        step_prompt = f"""
+作为专业的投资策略AI助手，请根据用户需求的复杂程度，设计合适数量的执行步骤（通常2-6个步骤）：
+
+用户需求：{message}
+
+请分析策略复杂度并决定步骤数量：
+- 简单策略（如基础配置建议）：2-3个步骤
+- 中等复杂度（如投资组合构建）：3-4个步骤  
+- 复杂策略（如多资产配置、量化策略）：4-6个步骤
+
+每个步骤必须包含：
+1. content: 具体的策略执行描述
+2. resourceType: browser（市场调研）/database（数据分析）/api（AI策略生成）/general（策略整合）
+3. results: 该步骤的策略产出
+4. executionDetails: 策略执行的技术细节
+
+请以JSON数组格式返回，根据策略实际复杂度确定步骤数量：
+
+[
+  {{
+    "content": "分析市场趋势和投资机会",
+    "resourceType": "browser",
+    "results": ["市场趋势", "投资机会"],
+    "executionDetails": {{"method": "市场调研", "scope": "全市场分析"}},
+    "urls": [],
+    "files": []
+  }}
+]
+"""
+        
+        ai_response = await asyncio.get_event_loop().run_in_executor(
+            None, 
+            lambda: qwen_analyzer.analyze_text(step_prompt, max_tokens=1000)
+        )
+        
+        if ai_response:
+            try:
+                import re
+                json_match = re.search(r'\[.*\]', ai_response, re.DOTALL)
+                if json_match:
+                    steps_data = json.loads(json_match.group())
+                    return steps_data
+            except:
+                pass
+        
+        # 根据用户需求生成更具体的默认策略步骤
+        user_msg_lower = message.lower()
+        
+        if any(keyword in user_msg_lower for keyword in ['配置', '组合', '资产']):
+            # 资产配置策略
+            return [
+                {
+                    "content": f"分析配置需求：{message[:20]}...",
+                    "resourceType": "general",
+                    "results": ["配置目标", "约束条件"],
+                    "executionDetails": {"strategyType": "资产配置"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "研究各类资产的历史表现",
+                    "resourceType": "database",
+                    "results": ["历史收益", "波动性分析", "相关性数据"],
+                    "executionDetails": {"dataSource": "资产数据库", "period": "历史数据"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "运用AI优化配置模型",
+                    "resourceType": "api",
+                    "results": ["最优权重", "风险收益比", "配置建议"],
+                    "executionDetails": {"model": "资产配置模型", "optimizer": "AI算法"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "制定动态调整策略和监控方案",
+                    "resourceType": "general",
+                    "results": ["调整规则", "监控指标", "执行时间表"],
+                    "executionDetails": {"deliverable": "配置策略方案"},
+                    "urls": [],
+                    "files": []
+                }
+            ]
+        elif any(keyword in user_msg_lower for keyword in ['量化', '算法', '模型']):
+            # 量化策略
+            return [
+                {
+                    "content": f"设计量化策略框架：{message[:20]}...",
+                    "resourceType": "general",
+                    "results": ["策略逻辑", "参数设置"],
+                    "executionDetails": {"strategyType": "量化策略"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "获取历史数据进行回测",
+                    "resourceType": "database",
+                    "results": ["价格数据", "指标数据", "回测结果"],
+                    "executionDetails": {"dataSource": "量化数据库", "method": "历史回测"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "AI优化策略参数",
+                    "resourceType": "api", 
+                    "results": ["最优参数", "绩效评估", "风险指标"],
+                    "executionDetails": {"optimizer": "AI参数优化", "method": "机器学习"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "生成量化策略执行方案",
+                    "resourceType": "general",
+                    "results": ["交易信号", "风控规则", "实盘建议"],
+                    "executionDetails": {"deliverable": "量化策略报告"},
+                    "urls": [],
+                    "files": []
+                }
+            ]
+        else:
+            # 通用投资策略
+            return [
+                {
+                    "content": f"制定投资策略目标：{message[:20]}...",
+                    "resourceType": "general",
+                    "results": ["投资目标", "风险偏好"],
+                    "executionDetails": {"strategyType": "投资策略"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "研究市场机会和趋势",
+                    "resourceType": "browser",
+                    "results": ["市场趋势", "投资机会", "专家观点"],
+                    "executionDetails": {"source": "投研报告", "focus": "市场机会"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "AI智能筛选投资标的",
+                    "resourceType": "api",
+                    "results": ["推荐标的", "评分排名", "投资逻辑"],
+                    "executionDetails": {"engine": "AI筛选算法", "criteria": "多因子模型"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "制定完整投资策略方案",
+                    "resourceType": "general",
+                    "results": ["策略方案", "仓位管理", "风险控制"],
+                    "executionDetails": {"deliverable": "投资策略报告"},
+                    "urls": [],
+                    "files": []
+                }
+            ]
+        
+    except Exception as e:
+        print(f"AI策略步骤生成失败: {e}")
+        return [
+            {
+                "content": "开始策略制定",
+                "resourceType": "general",
+                "results": [],
+                "executionDetails": {},
+                "urls": [],
+                "files": []
+            }
+        ]
+
+async def generate_smart_general_steps(message: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """使用AI智能生成通用步骤"""
+    try:
+        step_prompt = f"""
+作为智能AI助手，请根据用户问题的复杂程度，设计合适数量的执行步骤（通常2-5个步骤）：
+
+用户问题：{message}
+
+请分析问题复杂度并决定步骤数量：
+- 简单问题（如概念解释、基础查询）：2-3个步骤
+- 中等复杂度（如操作指导、比较分析）：3-4个步骤  
+- 复杂问题（如综合研究、多维分析）：4-5个步骤
+
+每个步骤必须包含：
+1. content: 具体的执行描述（说明要做什么具体操作）
+2. resourceType: browser（信息搜索）/database（数据查询）/api（AI分析）/general（通用处理）
+3. results: 该步骤的预期产出
+4. executionDetails: 执行的技术细节
+
+请以JSON数组格式返回，根据问题实际复杂度确定步骤数量。
+"""
+        
+        ai_response = await asyncio.get_event_loop().run_in_executor(
+            None, 
+            lambda: qwen_analyzer.analyze_text(step_prompt, max_tokens=800)
+        )
+        
+        if ai_response:
+            try:
+                import re
+                json_match = re.search(r'\[.*\]', ai_response, re.DOTALL)
+                if json_match:
+                    steps_data = json.loads(json_match.group())
+                    return steps_data
+            except:
+                pass
+        
+        # 根据用户问题生成更具体的默认通用步骤
+        user_msg_lower = message.lower()
+        
+        if any(keyword in user_msg_lower for keyword in ['如何', '怎么', '方法', '步骤']):
+            # 操作指导类问题
+            return [
+                {
+                    "content": f"分析操作需求：{message[:25]}...",
+                    "resourceType": "general",
+                    "results": ["需求理解", "操作框架"],
+                    "executionDetails": {"questionType": "操作指导"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "搜索相关操作指南和最佳实践",
+                    "resourceType": "browser",
+                    "results": ["操作指南", "实践案例", "专家建议"],
+                    "executionDetails": {"source": "专业指南", "focus": "实用方法"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "AI智能整理操作步骤",
+                    "resourceType": "api",
+                    "results": ["详细步骤", "注意事项", "风险提示"],
+                    "executionDetails": {"engine": "通义千问", "outputType": "操作指南"},
+                    "urls": [],
+                    "files": []
+                }
+            ]
+        elif any(keyword in user_msg_lower for keyword in ['什么', '定义', '解释', '概念']):
+            # 概念解释类问题
+            return [
+                {
+                    "content": f"识别关键概念：{message[:25]}...",
+                    "resourceType": "general",
+                    "results": ["概念识别", "解释维度"],
+                    "executionDetails": {"questionType": "概念解释"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "查找权威定义和专业解释",
+                    "resourceType": "browser",
+                    "results": ["权威定义", "专业解释", "实际应用"],
+                    "executionDetails": {"source": "专业资料", "focus": "准确定义"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "AI生成通俗易懂的解释",
+                    "resourceType": "api",
+                    "results": ["简明解释", "实例说明", "相关知识"],
+                    "executionDetails": {"engine": "通义千问", "style": "通俗易懂"},
+                    "urls": [],
+                    "files": []
+                }
+            ]
+        elif any(keyword in user_msg_lower for keyword in ['比较', '对比', '区别', '选择']):
+            # 比较选择类问题
+            return [
+                {
+                    "content": f"明确比较对象：{message[:25]}...",
+                    "resourceType": "general",
+                    "results": ["比较维度", "评估标准"],
+                    "executionDetails": {"questionType": "比较分析"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "收集各方面的详细信息",
+                    "resourceType": "browser",
+                    "results": ["详细信息", "客观数据", "用户评价"],
+                    "executionDetails": {"source": "多渠道信息", "method": "全面调研"},
+                    "urls": [],
+                    "files": []
+                },
+                {
+                    "content": "AI智能对比分析和建议",
+                    "resourceType": "api",
+                    "results": ["对比表格", "优缺点分析", "选择建议"],
+                    "executionDetails": {"engine": "通义千问", "outputType": "对比分析"},
+                    "urls": [],
+                    "files": []
+                }
+            ]
+        else:
+            # 通用咨询类问题
+            if complexity == 'simple':
+                # 简单问题：2步即可
+                return [
+                    {
+                        "content": f"理解问题需求：{message[:25]}...",
+                        "resourceType": "general",
+                        "results": ["问题分析"],
+                        "executionDetails": {"questionType": "简单咨询", "complexity": "简单"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "AI快速生成解答",
+                        "resourceType": "api",
+                        "results": ["直接解答"],
+                        "executionDetails": {"engine": "通义千问", "style": "快速准确"},
+                        "urls": [],
+                        "files": []
+                    }
+                ]
+            elif complexity == 'complex':
+                # 复杂问题：4-5步
+                return [
+                    {
+                        "content": f"深度理解问题背景：{message[:25]}...",
+                        "resourceType": "general",
+                        "results": ["问题分析", "背景研究", "解答框架"],
+                        "executionDetails": {"questionType": "复杂咨询", "complexity": "复杂"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "全面搜索相关知识和资料",
+                        "resourceType": "browser",
+                        "results": ["权威资料", "最新信息", "多角度观点"],
+                        "executionDetails": {"source": "全网搜索", "scope": "多维度信息"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "收集专业数据和案例",
+                        "resourceType": "database",
+                        "results": ["专业数据", "实际案例", "统计信息"],
+                        "executionDetails": {"dataSource": "专业数据库", "focus": "实证支撑"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "AI深度分析和综合整理",
+                        "resourceType": "api",
+                        "results": ["深度分析", "综合结论", "实用建议"],
+                        "executionDetails": {"engine": "通义千问", "analysisType": "深度综合"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "生成详细解答报告",
+                        "resourceType": "general",
+                        "results": ["完整解答", "延伸思考", "行动建议"],
+                        "executionDetails": {"deliverable": "综合解答报告"},
+                        "urls": [],
+                        "files": []
+                    }
+                ]
+            else:
+                # 中等复杂度：3步
+                return [
+                    {
+                        "content": f"理解咨询问题：{message[:25]}...",
+                        "resourceType": "general",
+                        "results": ["问题分析", "解答方向"],
+                        "executionDetails": {"questionType": "通用咨询", "complexity": "中等"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "搜索相关知识和信息",
+                        "resourceType": "browser",
+                        "results": ["相关知识", "最新信息", "专业观点"],
+                        "executionDetails": {"source": "知识库搜索", "scope": "全面信息"},
+                        "urls": [],
+                        "files": []
+                    },
+                    {
+                        "content": "AI智能生成专业解答",
+                        "resourceType": "api",
+                        "results": ["专业解答", "实用建议", "延伸知识"],
+                        "executionDetails": {"engine": "通义千问", "style": "专业准确"},
+                        "urls": [],
+                        "files": []
+                    }
+                ]
+        
+    except Exception as e:
+        print(f"AI通用步骤生成失败: {e}")
+        return [
+            {
+                "content": "开始处理请求",
+                "resourceType": "general",
+                "results": [],
+                "executionDetails": {},
+                "urls": [],
+                "files": []
+            }
+        ]
 
 async def generate_ai_response(message: str, context: Dict[str, Any] = None):
     """生成AI回复（保留兼容性）"""
@@ -2071,3 +2852,64 @@ def extract_market_insights_from_results(node_results: Dict[str, Any]) -> List[s
     except Exception as e:
         print(f"提取市场洞察失败: {e}")
         return ["市场分析暂时不可用"]
+
+def generate_fallback_analysis_response(message: str) -> str:
+    """生成降级的分析回复"""
+    return f"""基于您的问题 "{message}"，我为您提供以下分析框架：
+
+## 📊 分析思路
+
+**1. 基本面分析**
+- 查看公司财务报表和经营状况
+- 了解行业发展趋势和竞争格局  
+- 关注宏观经济环境影响
+
+**2. 技术面分析**
+- 观察价格走势和成交量变化
+- 分析关键技术指标信号
+- 识别支撑阻力位置
+
+**3. 风险评估**
+- 评估市场风险和个股风险
+- 考虑政策风险和行业风险
+- 制定风险控制策略
+
+**4. 投资建议**
+- 根据风险承受能力选择投资策略
+- 建议适当分散投资降低风险
+- 设置合理的止盈止损点位
+
+💡 **温馨提示**: 投资有风险，建议您结合自身情况和更多信息做出谨慎决策。"""
+
+def generate_fallback_strategy_response(message: str) -> str:
+    """生成降级的策略回复"""
+    return f"""针对您的策略需求 "{message}"，我为您提供以下建议框架：
+
+## 🎯 策略制定指南
+
+**1. 目标设定**
+- 明确投资目标和预期收益
+- 设定可接受的风险水平
+- 确定投资时间周期
+
+**2. 资产配置**
+- 股票、债券、基金等的比例配置
+- 行业板块的分散配置
+- 根据市场情况动态调整
+
+**3. 操作策略**
+- 选择合适的买入时机
+- 制定分批建仓计划
+- 设置止盈止损规则
+
+**4. 风险管理**
+- 控制单只股票的仓位比例
+- 设置最大损失容忍度
+- 定期评估和调整策略
+
+**5. 执行纪律**
+- 严格按照策略执行
+- 避免情绪化交易
+- 定期总结和优化
+
+📈 **建议**: 任何投资策略都需要根据市场变化和个人情况及时调整。"""

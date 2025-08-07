@@ -16,10 +16,13 @@ import {
   Database,
   Zap,
   FileText,
-  Loader2
+  Loader2,
+  X
 } from 'lucide-react';
 import { createStreamingChat } from '../../services/pythonApiClient';
 import { pythonApiClient } from '../../services/pythonApiClient';
+import { workflowResourceManager } from '../../services/workflowResourceManager';
+import { workflowApi, type WorkflowState } from '../../services/workflowApi';
 import { 
   getResourceTypeConfig, 
   getStepCategoryConfig, 
@@ -61,10 +64,13 @@ interface ExecutionStep {
   isClickable?: boolean;
   isCompleted?: boolean; // 新增：标识步骤是否已完成
   results?: any[]; // 新增：步骤执行结果
+  executionDetails?: Record<string, any>; // 新增：执行详情
+  urls?: string[]; // 新增：相关URL列表
+  files?: string[]; // 新增：相关文件列表
 }
 
 interface StreamChunk {
-  type: 'start' | 'content' | 'progress' | 'complete' | 'error' | 'task_info';
+  type: 'start' | 'content' | 'progress' | 'complete' | 'error' | 'task_info' | 'workflow_created' | 'workflow_updated';
   content?: string;
   step?: number;
   totalSteps?: number;
@@ -72,10 +78,17 @@ interface StreamChunk {
   category?: string;
   resourceType?: string; // 新增：资源类型
   results?: any[]; // 新增：步骤结果
+  executionDetails?: Record<string, any>; // 新增：执行详情
+  urls?: string[]; // 新增：URL列表
+  files?: string[]; // 新增：文件列表
   error?: string;
   // 任务信息
   taskTitle?: string;
   taskDescription?: string;
+  // 工作流事件
+  workflow_id?: string;
+  title?: string;
+  description?: string;
 }
 
 interface WorkflowCanvasProps {
@@ -96,19 +109,106 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
   const [currentExecutionSteps, setCurrentExecutionSteps] = useState<ExecutionStep[]>([]);
   const [selectedStep, setSelectedStep] = useState<ExecutionStep | null>(null);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const isUnmountingRef = useRef(false);
+  const currentConnectionIdRef = useRef<string | null>(null);
 
   // 调试：显示当前workflowId
   React.useEffect(() => {
     console.log('WorkflowCanvas接收到的workflowId:', workflowId);
   }, [workflowId]);
 
-  // 初始化对话消息
-  useEffect(() => {
-    if (workflowId) {
-      // 创建新任务时，只显示欢迎消息
+  // 尝试恢复工作流状态
+  const restoreWorkflowState = async (workflowId: string) => {
+    try {
+      setIsRestoring(true);
+      const workflowState = await workflowApi.getWorkflowState(workflowId);
+      
+      if (workflowState) {
+        console.log('恢复工作流状态:', workflowState);
+        
+        // 恢复消息
+        const restoredMessages: TaskMessage[] = Array.isArray(workflowState.messages) 
+          ? workflowState.messages.map(msg => ({
+              id: msg.message_id,
+              type: msg.message_type as TaskMessage['type'],
+              content: msg.content,
+              timestamp: new Date(msg.timestamp),
+              status: msg.status as any,
+              data: msg.data
+            }))
+          : [];
+        
+        // 恢复步骤
+        const restoredSteps: ExecutionStep[] = Array.isArray(workflowState.steps)
+          ? workflowState.steps.map(step => ({
+              id: step.step_id,
+              content: step.content,
+              stepNumber: step.step_number,
+              totalSteps: workflowState.workflow.total_steps,
+              category: step.category as ExecutionStep['category'],
+              resourceType: step.resource_type as ExecutionStep['resourceType'],
+              timestamp: new Date(step.created_at),
+              isClickable: true,
+              isCompleted: step.status === 'completed',
+              results: step.results || [],
+              executionDetails: step.execution_details || {},
+              urls: step.urls || [],
+              files: step.files || []
+            }))
+          : [];
+        
+        // 恢复资源到资源管理器
+        if (Array.isArray(workflowState.resources)) {
+          workflowState.resources.forEach(resource => {
+          // 将数据库资源转换为前端资源格式
+          const frontendResource = {
+            id: resource.id,
+            type: resource.resource_type,
+            title: resource.title,
+            description: resource.description,
+            timestamp: new Date(),
+            data: resource.data,
+            workflowId: workflowId
+          };
+          
+                      // 直接添加到资源管理器（绕过addResourcesFromStep的重复检查）
+            const currentResources = workflowResourceManager.getWorkflowResources(workflowId);
+            const exists = currentResources.find(r => r.id === resource.id);
+            if (!exists) {
+              // 这里需要直接操作资源管理器的内部状态
+              (workflowResourceManager as any).resources.set(workflowId, [...currentResources, frontendResource]);
+            }
+          });
+        }
+        
+        setMessages(restoredMessages);
+        setCurrentExecutionSteps(restoredSteps);
+        
+        // 恢复的工作流不应该立即设置为运行状态，因为没有活跃的流式连接
+        // 用户需要手动输入新指令来继续工作流
+        // if (workflowState.workflow.status === 'running') {
+        //   setIsRunning(true);
+        // }
+        
+        console.log('工作流状态恢复完成');
+      } else {
+        // 没有找到已保存的状态，显示欢迎消息
+        const initialMessages: TaskMessage[] = [
+          {
+            id: 'welcome',
+            type: 'system',
+            content: '欢迎使用 FindValue AI 工作流！请输入您的任务需求，我将为您创建专属的工作流程。',
+            timestamp: new Date()
+          }
+        ];
+        setMessages(initialMessages);
+      }
+    } catch (error) {
+      console.error('恢复工作流状态失败:', error);
+      // 恢复失败，显示欢迎消息
       const initialMessages: TaskMessage[] = [
         {
           id: 'welcome',
@@ -118,6 +218,27 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
         }
       ];
       setMessages(initialMessages);
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  // 初始化对话消息
+  useEffect(() => {
+    // 重置所有状态（包括loading状态和组件卸载状态）
+    isUnmountingRef.current = false;
+    setIsStreaming(false);
+    setIsRunning(false);
+    setCurrentExecutionSteps([]);
+    setCurrentTaskId(null);
+    setSelectedStep(null);
+    
+    if (workflowId) {
+      // 清理资源管理器中的旧数据
+      workflowResourceManager.clearWorkflowResources(workflowId);
+      
+      // 尝试恢复工作流状态
+      restoreWorkflowState(workflowId);
     } else {
       setMessages([
         {
@@ -130,8 +251,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
     }
   }, [workflowId]);
 
-  // 组件卸载时关闭EventSource
+  // 组件挂载时重置卸载状态
   useEffect(() => {
+    isUnmountingRef.current = false; // 重置卸载状态
+    
     return () => {
       isUnmountingRef.current = true;
       if (eventSourceRef.current) {
@@ -144,18 +267,26 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
 
   // 监听路由变化，切换workflowId时关闭之前的连接
   useEffect(() => {
+    // 工作流切换时确保组件处于活跃状态
+    isUnmountingRef.current = false;
+    
     // 当workflowId变化时，立即断开之前的连接
     if (eventSourceRef.current) {
       console.log('工作流切换，立即关闭当前SSE连接:', eventSourceRef.current.readyState);
-      eventSourceRef.current.close();
+      try {
+        eventSourceRef.current.close();
+      } catch (error) {
+        console.error('关闭SSE连接失败:', error);
+      }
       eventSourceRef.current = null;
-      
-      // 重置相关状态
-      setIsStreaming(false);
-      setIsRunning(false);
-      setCurrentExecutionSteps([]);
-      setCurrentTaskId(null);
     }
+    
+    // 重置所有相关状态（不管是否有连接）
+    setIsStreaming(false);
+    setIsRunning(false);
+    setCurrentExecutionSteps([]);
+    setCurrentTaskId(null);
+    currentConnectionIdRef.current = null;
     
     // 同时关闭全局的活跃连接（保险措施）
     try {
@@ -170,7 +301,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
     return () => {
       if (eventSourceRef.current) {
         console.log('工作流切换清理，关闭当前SSE连接');
-        eventSourceRef.current.close();
+        try {
+          eventSourceRef.current.close();
+        } catch (error) {
+          console.error('清理连接失败:', error);
+        }
         eventSourceRef.current = null;
       }
     };
@@ -203,17 +338,40 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
   };
 
   const startStreamingChat = async (message: string) => {
+    console.log('开始流式对话，message:', message);
+    
+    // 确保组件处于活跃状态（修复StrictMode下的双重卸载问题）
+    isUnmountingRef.current = false;
+    
+    // 创建唯一的连接ID
+    const connectionId = `conn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // 首先强制关闭任何现有连接
+    if (eventSourceRef.current) {
+      console.log('关闭现有SSE连接');
+      try {
+        eventSourceRef.current.close();
+      } catch (error) {
+        console.error('关闭现有连接失败:', error);
+      }
+      eventSourceRef.current = null;
+    }
+    
+    // 清理全局连接池
+    try {
+      if (pythonApiClient.getActiveConnectionCount() > 0) {
+        console.log('清理全局连接池，当前连接数:', pythonApiClient.getActiveConnectionCount());
+        pythonApiClient.closeAllConnections();
+      }
+    } catch (error) {
+      console.error('清理全局连接池失败:', error);
+    }
+    
     setIsStreaming(true);
     setIsRunning(true);
+    currentConnectionIdRef.current = connectionId;
 
-    // 创建用户消息
-    const userMessage: TaskMessage = {
-      id: Date.now().toString(),
-      type: 'user',
-      content: message,
-      timestamp: new Date()
-    };
-
+    // 创建AI消息（不重复添加用户消息，因为在handleSendMessage中已经添加了）
     const aiMessageId = `ai-${Date.now()}`;
     const aiMessage: TaskMessage = {
       id: aiMessageId,
@@ -223,7 +381,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
       isComplete: false,
       isStreaming: true,
       data: {
-        isAssistantLoading: true // 新增：标识助手正在loading
+        isAssistantLoading: true // 标识助手正在loading
       }
     };
 
@@ -232,8 +390,12 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
     try {
       // 强制关闭之前的连接和清理全局连接
       if (eventSourceRef.current) {
-        console.log('强制关闭之前的连接:', eventSourceRef.current.readyState);
-        eventSourceRef.current.close();
+        console.log('强制关闭之前的连接');
+        try {
+          (eventSourceRef.current as EventSource).close();
+        } catch (error) {
+          console.error('关闭连接失败:', error);
+        }
         eventSourceRef.current = null;
       }
       
@@ -254,27 +416,75 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
       const eventSource = createStreamingChat({
         message: message,
         conversationId: workflowId || `workflow-${Date.now()}`,
-        context: { workflowId }
+        context: { workflowId },
+        workflowId: workflowId || undefined  // 传递工作流ID以支持立即落库
       });
       eventSourceRef.current = eventSource;
 
       // 处理流式消息
       eventSource.onmessage = (event) => {
-        // 检查组件是否已卸载或连接是否已关闭
-        if (isUnmountingRef.current || eventSourceRef.current !== eventSource) {
-          console.log('组件已卸载或连接已更换，忽略消息');
+        // 检查组件是否已卸载
+        if (isUnmountingRef.current) {
+          console.log('组件已卸载，忽略消息');
+          return;
+        }
+        
+        // 检查是否为当前活跃连接
+        if (currentConnectionIdRef.current !== connectionId) {
+          console.log('非当前活跃连接，忽略消息');
+          return;
+        }
+        
+        // 检查连接状态
+        if (eventSource.readyState !== EventSource.OPEN) {
+          console.log('连接已关闭，忽略消息');
           return;
         }
         
         try {
           const chunk: StreamChunk = JSON.parse(event.data);
           
-          switch (chunk.type) {
+                    switch (chunk.type) {
+            case 'workflow_created':
+              // 处理工作流创建确认
+              console.log('工作流已创建并落库:', chunk);
+              if ((window as any).updateSidebarTask && chunk.workflow_id) {
+                (window as any).updateSidebarTask(
+                  chunk.workflow_id, 
+                  chunk.title || '新建工作流...', 
+                  chunk.description || '正在生成工作流描述...'
+                );
+              }
+              break;
+
+            case 'workflow_updated':
+              // 处理工作流更新确认
+              console.log('工作流标题和描述已更新:', chunk);
+              if ((window as any).updateSidebarTask && chunk.workflow_id) {
+                (window as any).updateSidebarTask(
+                  chunk.workflow_id, 
+                  chunk.title, 
+                  chunk.description
+                );
+              }
+              break;
+
             case 'start':
               console.log('开始接收流式响应');
               setCurrentExecutionSteps([]);
               setCurrentTaskId(aiMessageId);
-              
+
+              // 立即清除AI消息的loading状态
+              setMessages(prev => prev.map(msg => 
+                msg.id === aiMessageId 
+                  ? { 
+                      ...msg, 
+                      content: '正在分析处理中...', // 更新为实际的处理状态
+                      data: { ...msg.data, isAssistantLoading: false } // 清除loading状态
+                    }
+                  : msg
+              ));
+
               // 通知右侧面板任务开始，拉起面板
               if ((window as any).updateWorkspacePanel) {
                 (window as any).updateWorkspacePanel({
@@ -283,9 +493,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                   messageId: aiMessageId
                 });
               }
-              
-              // 保持loading状态，等待第一个progress或content事件再清除
-              console.log('任务开始，保持loading状态直到收到内容');
+
+              console.log('任务开始，已清除loading状态');
               break;
               
             case 'task_info':
@@ -324,6 +533,9 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                   category: (chunk.category as ExecutionStep['category']) || 'general',
                   resourceType: (chunk.resourceType as ExecutionStep['resourceType']) || 'general',
                   results: chunk.results || [],
+                  executionDetails: chunk.executionDetails || {},
+                  urls: chunk.urls || [],
+                  files: chunk.files || [],
                   timestamp: new Date(),
                   isClickable: true,
                   isCompleted: false // 新步骤默认未完成
@@ -369,6 +581,23 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                   return msg;
                 }));
                 
+                // 添加资源到资源管理器
+                if (workflowId) {
+                  workflowResourceManager.addResourcesFromStep(
+                    workflowId,
+                    newStep.id,
+                    {
+                      content: newStep.content,
+                      category: newStep.category,
+                      resourceType: newStep.resourceType,
+                      results: newStep.results,
+                      executionDetails: newStep.executionDetails,
+                      urls: newStep.urls,
+                      files: newStep.files
+                    }
+                  );
+                }
+
                 // 将新步骤作为独立的系统消息添加到对话中
                 const stepMessage: TaskMessage = {
                   id: `step-${newStep.id}`,
@@ -403,7 +632,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                     taskId: aiMessageId,
                     isFirstStep: newStep.stepNumber === 1, // 标识是否为第一个步骤
                     resourceType: newStep.resourceType,
-                    results: newStep.results
+                    results: newStep.results,
+                    executionDetails: newStep.executionDetails,
+                    urls: newStep.urls,
+                    files: newStep.files
                   });
                 }
               }
@@ -425,9 +657,13 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                   
                   if (aiMsgIndex !== -1) {
                     const currentAiMsg = prev[aiMsgIndex];
+                    // 如果当前内容是loading文本，则替换；否则追加
+                    const isLoadingText = currentAiMsg.content === '正在思考中...' || currentAiMsg.content === '正在分析处理中...';
+                    const newContent = isLoadingText ? (chunk.content || '') : currentAiMsg.content + (chunk.content || '');
+                    
                     const updatedAiMsg = {
                       ...currentAiMsg,
-                      content: currentAiMsg.content + chunk.content,
+                      content: newContent,
                       steps: currentExecutionSteps,
                       currentStep: currentExecutionSteps[currentExecutionSteps.length - 1],
                       data: { 
@@ -499,9 +735,22 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
               setIsStreaming(false);
               setIsRunning(false);
               
-              // 清理连接引用
-              if (eventSourceRef.current === eventSource) {
-                eventSourceRef.current = null;
+              // 任务完成后，生成更精准的工作流标题和描述
+              if (workflowId && (window as any).updateSidebarTask) {
+                // 延迟执行，确保messages状态已更新
+                setTimeout(() => {
+                  setMessages(currentMessages => {
+                    const aiMsg = currentMessages.find(msg => msg.id === aiMessageId);
+                    if (aiMsg && aiMsg.content) {
+                      // 基于AI回复内容生成精准的标题和描述
+                      const { title, description } = generateFinalWorkflowTitle(message, aiMsg.content);
+                      
+                      console.log('任务完成，更新最终标题:', title, description);
+                      (window as any).updateSidebarTask(workflowId, title, description);
+                    }
+                    return currentMessages;
+                  });
+                }, 100);
               }
               
               // 安全关闭连接
@@ -509,6 +758,16 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                 eventSource.close();
               } catch (closeError) {
                 console.error('关闭EventSource失败:', closeError);
+              }
+              
+              // 清理连接引用
+              if (eventSourceRef.current === eventSource) {
+                eventSourceRef.current = null;
+              }
+              
+              // 清理连接ID
+              if (currentConnectionIdRef.current === connectionId) {
+                currentConnectionIdRef.current = null;
               }
               
               // 通知右侧面板任务完成
@@ -539,7 +798,23 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
               setCurrentTaskId(null);
               setIsStreaming(false);
               setIsRunning(false);
-              eventSource.close();
+              
+              // 安全关闭连接
+              try {
+                eventSource.close();
+              } catch (closeError) {
+                console.error('关闭EventSource失败:', closeError);
+              }
+              
+              // 清理连接引用
+              if (eventSourceRef.current === eventSource) {
+                eventSourceRef.current = null;
+              }
+              
+              // 清理连接ID
+              if (currentConnectionIdRef.current === connectionId) {
+                currentConnectionIdRef.current = null;
+              }
               break;
           }
         } catch (error) {
@@ -550,10 +825,23 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
       // 处理连接错误
       eventSource.onerror = (error) => {
         console.error('EventSource连接错误:', error);
+        console.log('EventSource连接状态:', eventSource.readyState);
         
-        // 检查是否还是当前连接
-        if (eventSourceRef.current !== eventSource || isUnmountingRef.current) {
-          console.log('连接已更换或组件已卸载，忽略错误处理');
+        // 检查组件是否已卸载
+        if (isUnmountingRef.current) {
+          console.log('组件已卸载，忽略错误处理');
+          return;
+        }
+        
+        // 检查是否为当前活跃连接
+        if (currentConnectionIdRef.current !== connectionId) {
+          console.log('非当前活跃连接，忽略错误处理');
+          return;
+        }
+        
+        // 检查连接是否已经关闭
+        if (eventSource.readyState === EventSource.CLOSED) {
+          console.log('连接已关闭，忽略错误处理');
           return;
         }
         
@@ -573,16 +861,21 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
         setIsStreaming(false);
         setIsRunning(false);
         
-        // 清理连接引用
-        if (eventSourceRef.current === eventSource) {
-          eventSourceRef.current = null;
-        }
-        
         // 安全关闭连接
         try {
           eventSource.close();
         } catch (closeError) {
           console.error('关闭EventSource失败:', closeError);
+        }
+        
+        // 清理连接引用
+        if (eventSourceRef.current === eventSource) {
+          eventSourceRef.current = null;
+        }
+        
+        // 清理连接ID
+        if (currentConnectionIdRef.current === connectionId) {
+          currentConnectionIdRef.current = null;
         }
       };
 
@@ -603,6 +896,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
       setCurrentTaskId(null);
       setIsStreaming(false);
       setIsRunning(false);
+      
+      // 清理连接ID
+      if (currentConnectionIdRef.current === connectionId) {
+        currentConnectionIdRef.current = null;
+      }
     }
   };
 
@@ -613,6 +911,120 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
       e.preventDefault();
       handleSendMessage();
     }
+  };
+
+  // 生成最终工作流标题的函数
+  const generateFinalWorkflowTitle = (userMessage: string, aiContent: string) => {
+    // 提取关键词来生成更精准的标题
+    const userMsgLower = userMessage.toLowerCase();
+    const aiContentLower = aiContent.toLowerCase();
+    
+    // 检查是否包含股票代码
+    const stockPattern = /[0-9]{6}|[A-Z]{2,5}/g;
+    const stocks = userMessage.match(stockPattern) || [];
+    
+    // 检查行业板块
+    const sectors = [];
+    const sectorKeywords = {
+      '科技股': ['科技', '技术', '互联网', '软件', '芯片', 'AI', '人工智能'],
+      '医药股': ['医药', '医疗', '生物', '制药', '健康'],
+      '金融股': ['银行', '保险', '证券', '金融', '券商'],
+      '新能源': ['新能源', '电动车', '光伏', '风电', '锂电池'],
+      '消费股': ['消费', '零售', '食品', '饮料', '白酒', '家电']
+    };
+    
+    for (const [sector, keywords] of Object.entries(sectorKeywords)) {
+      if (keywords.some(kw => userMsgLower.includes(kw))) {
+        sectors.push(sector);
+        break; // 只取第一个匹配的板块
+      }
+    }
+    
+    // 检查分析类型
+    let analysisType = '';
+    if (userMsgLower.includes('分析') || userMsgLower.includes('研究')) {
+      analysisType = '分析';
+    } else if (userMsgLower.includes('推荐') || userMsgLower.includes('选择')) {
+      analysisType = '推荐';
+    } else if (userMsgLower.includes('策略') || userMsgLower.includes('投资')) {
+      analysisType = '策略';
+    } else if (userMsgLower.includes('风险') || userMsgLower.includes('评估')) {
+      analysisType = '风险评估';
+    } else {
+      analysisType = '咨询';
+    }
+    
+    // 生成标题
+    let title = '';
+    if (stocks.length > 0) {
+      title = `${stocks[0]}${analysisType}`;
+    } else if (sectors.length > 0) {
+      title = `${sectors[0]}${analysisType}`;
+    } else {
+      title = `智能投资${analysisType}`;
+    }
+    
+    // 生成描述（基于用户原始问题，但更简洁）
+    let description = userMessage.trim();
+    if (description.length > 40) {
+      description = description.substring(0, 37) + '...';
+    }
+    
+    // 如果AI回复中包含具体建议，更新描述
+    if (aiContentLower.includes('建议') && aiContentLower.includes('推荐')) {
+      description = '已生成投资建议和分析报告';
+    } else if (aiContentLower.includes('分析') && aiContentLower.includes('数据')) {
+      description = '已完成数据分析和市场研究';
+    } else if (aiContentLower.includes('风险') && aiContentLower.includes('评估')) {
+      description = '已完成风险评估分析';
+    }
+    
+    return { title, description };
+  };
+
+  // 强制停止所有连接
+  const forceStopAllConnections = () => {
+    console.log('用户手动强制停止所有连接');
+    
+    // 停止当前连接
+    if (eventSourceRef.current) {
+      console.log('强制关闭当前SSE连接');
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    
+    // 清理全局连接池
+    try {
+      pythonApiClient.closeAllConnections();
+      console.log('已清理全部连接');
+    } catch (error) {
+      console.error('清理连接失败:', error);
+    }
+    
+    // 重置所有状态
+    setIsStreaming(false);
+    setIsRunning(false);
+    setCurrentExecutionSteps([]);
+    setCurrentTaskId(null);
+    
+    // 清除所有消息中的loading状态
+    setMessages(prev => prev.map(msg => ({
+      ...msg,
+      data: {
+        ...msg.data,
+        isLoading: false,
+        isAssistantLoading: false
+      },
+      isStreaming: false
+    })));
+    
+    // 显示停止消息
+    setMessages(prev => [...prev, {
+      id: `stop-${Date.now()}`,
+      type: 'system',
+      content: '⏹️ 所有连接已手动停止',
+      timestamp: new Date()
+    }]);
   };
 
   const handleStepClick = (step: ExecutionStep, messageId: string) => {
@@ -635,7 +1047,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
         step: step,
         messageId: messageId,
         tabType: tabType,
-        results: step.results || []
+        results: step.results || [],
+        executionDetails: step.executionDetails || {},
+        urls: step.urls || [],
+        files: step.files || [],
+        resourceType: step.resourceType
       });
     }
   };
@@ -759,6 +1175,18 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
       second: '2-digit'
     });
   };
+
+  // 如果正在恢复状态，显示加载界面
+  if (isRestoring) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center bg-white dark:bg-slate-900">
+        <div className="flex items-center space-x-3 text-gray-600 dark:text-gray-400">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <span className="text-lg">正在恢复工作流状态...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col bg-white dark:bg-slate-900">
@@ -962,6 +1390,17 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
             >
               {isStreaming ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
             </button>
+            
+            {/* 强制停止按钮 */}
+            {(isStreaming || isRunning) && (
+              <button
+                onClick={forceStopAllConnections}
+                className="p-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex-shrink-0"
+                title="强制停止所有连接"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
           </div>
           
         </div>

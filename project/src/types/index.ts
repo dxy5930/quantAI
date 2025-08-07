@@ -90,6 +90,8 @@ export interface ApiResponse<T = any> {
   error?: string;
 }
 
+
+
 // 分页参数接口
 export interface PaginationParams {
   page?: number;
@@ -107,14 +109,28 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
-// 统一API响应格式
-export interface UnifiedApiResponse<T = any> {
-  success: boolean;
-  data?: T;
-  message?: string;
-  error?: string;
-  timestamp?: string;
+// 成功响应接口
+export interface SuccessResponse<T = any> {
+  code: number | string;
+  success: true;
+  data: T;
+  message: string;
+  timestamp: string;
 }
+
+// 错误响应接口
+export interface ErrorResponse {
+  success: false;
+  data: null;
+  code: ErrorCode | string;
+  message: string;
+  timestamp: string;
+  path?: string;
+  details?: any;
+}
+
+// 统一API响应类型
+export type UnifiedApiResponse<T = any> = SuccessResponse<T> | ErrorResponse;
 
 
 

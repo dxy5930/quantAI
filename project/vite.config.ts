@@ -17,9 +17,10 @@ export default defineConfig(({ mode }) => {
       open: true,
       proxy: {
         "/api": {
-          target: "http://172.35.65.28:3001",
+          target: env.VITE_PYTHON_API_BASE_URL || "http://localhost:8000",
           changeOrigin: true,
-          // 不重写路径，保持 /api/v1 前缀
+          // 已切换到Python API服务，不重写路径，保持 /api/v1 前缀
+          // 可通过环境变量 VITE_PYTHON_API_BASE_URL 配置API地址
         },
       },
     },
