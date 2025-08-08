@@ -152,10 +152,13 @@ export class UserStore {
       });
 
       return response;
-    } catch (error) {
+    } catch (error: any) {
       runInAction(() => {
         this.isLoading = false;
         if (error instanceof HttpError) {
+          this.error = error.message;
+        } else if (error && typeof error.message === 'string' && error.message) {
+          // 透传后端返回的错误消息（如：用户不存在、密码不正确等）
           this.error = error.message;
         } else {
           this.error = '登录失败，请稍后重试';
@@ -200,10 +203,12 @@ export class UserStore {
       });
 
       return response;
-    } catch (error) {
+    } catch (error: any) {
       runInAction(() => {
         this.isLoading = false;
         if (error instanceof HttpError) {
+          this.error = error.message;
+        } else if (error && typeof error.message === 'string' && error.message) {
           this.error = error.message;
         } else {
           this.error = '注册失败，请稍后重试';
@@ -305,34 +310,21 @@ export class UserStore {
   }
 
   // 表单操作方法
-  setLoginForm = (form: Partial<LoginCredentials>) => {
-    runInAction(() => {
-      this.loginForm = { ...this.loginForm, ...form };
-    });
-  }
-
-  setRegisterForm = (form: Partial<RegisterData>) => {
-    runInAction(() => {
-      this.registerForm = { ...this.registerForm, ...form };
-    });
-  }
+  setLoginForm = (data: Partial<LoginCredentials>) => {
+    this.loginForm = { ...this.loginForm, ...data };
+  };
 
   clearLoginForm = () => {
-    runInAction(() => {
-      this.loginForm = { username: '', password: '' };
-    });
-  }
+    this.loginForm = { username: '', password: '' };
+  };
+
+  setRegisterForm = (data: Partial<RegisterData>) => {
+    this.registerForm = { ...this.registerForm, ...data };
+  };
 
   clearRegisterForm = () => {
-    runInAction(() => {
-      this.registerForm = {
-        username: '',
-        email: '',
-        password: '',
-        confirmPassword: ''
-      };
-    });
-  }
+    this.registerForm = { username: '', email: '', password: '', confirmPassword: '' };
+  };
 
   clearError = () => {
     runInAction(() => {

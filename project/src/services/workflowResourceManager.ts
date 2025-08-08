@@ -39,9 +39,26 @@ class WorkflowResourceManager {
     const workflowResources = this.resources.get(workflowId) || [];
     const timestamp = new Date();
 
+    // 规范化：确保为数组，避免 forEach 报错
+    const urls = Array.isArray(stepData.urls)
+      ? stepData.urls
+      : stepData.urls
+      ? [stepData.urls as unknown as string]
+      : [];
+    const files = Array.isArray(stepData.files)
+      ? stepData.files
+      : stepData.files
+      ? [stepData.files as unknown as string]
+      : [];
+    const resultsArray = Array.isArray(stepData.results)
+      ? stepData.results
+      : stepData.results !== undefined && stepData.results !== null
+      ? [stepData.results as unknown as any]
+      : [];
+
     // 从URLs添加Web资源
-    if (stepData.urls && stepData.urls.length > 0) {
-      stepData.urls.forEach((url, index) => {
+    if (urls.length > 0) {
+      urls.forEach((url, index) => {
         const webResource: WorkflowResource = {
           id: `${stepId}_web_${index}`,
           type: 'web',
@@ -64,8 +81,8 @@ class WorkflowResourceManager {
     }
 
     // 从文件添加文件资源
-    if (stepData.files && stepData.files.length > 0) {
-      stepData.files.forEach((file, index) => {
+    if (files.length > 0) {
+      files.forEach((file, index) => {
         const fileResource: WorkflowResource = {
           id: `${stepId}_file_${index}`,
           type: 'file',
@@ -91,17 +108,17 @@ class WorkflowResourceManager {
 
     // 从执行详情添加API或数据库资源
     if (stepData.executionDetails) {
-      if (stepData.resourceType === 'api' && stepData.executionDetails.endpoint) {
+      if (stepData.resourceType === 'api' && (stepData.executionDetails as any).endpoint) {
         const apiResource: WorkflowResource = {
           id: `${stepId}_api`,
           type: 'api',
-          title: `API: ${stepData.executionDetails.endpoint}`,
+          title: `API: ${(stepData.executionDetails as any).endpoint}`,
           description: stepData.content,
           timestamp,
           data: {
-            endpoint: stepData.executionDetails.endpoint,
-            method: stepData.executionDetails.method || 'GET',
-            documentation: stepData.executionDetails.documentation,
+            endpoint: (stepData.executionDetails as any).endpoint,
+            method: (stepData.executionDetails as any).method || 'GET',
+            documentation: (stepData.executionDetails as any).documentation,
             source: 'step_execution'
           },
           stepId,
@@ -113,17 +130,17 @@ class WorkflowResourceManager {
         workflowResources.push(apiResource);
       }
 
-      if (stepData.resourceType === 'database' && stepData.executionDetails.dataSource) {
+      if (stepData.resourceType === 'database' && (stepData.executionDetails as any).dataSource) {
         const dbResource: WorkflowResource = {
           id: `${stepId}_database`,
           type: 'database',
-          title: `数据库: ${stepData.executionDetails.dataSource}`,
+          title: `数据库: ${(stepData.executionDetails as any).dataSource}`,
           description: stepData.content,
           timestamp,
           data: {
-            name: stepData.executionDetails.dataSource,
-            tables: stepData.executionDetails.tables || [],
-            queryUrl: stepData.executionDetails.queryUrl,
+            name: (stepData.executionDetails as any).dataSource,
+            tables: (stepData.executionDetails as any).tables || [],
+            queryUrl: (stepData.executionDetails as any).queryUrl,
             source: 'step_execution'
           },
           stepId,
@@ -137,20 +154,20 @@ class WorkflowResourceManager {
     }
 
     // 从结果添加图表资源
-    if (stepData.results && stepData.results.length > 0) {
-      stepData.results.forEach((result, index) => {
-        if (typeof result === 'object' && result.type === 'chart') {
+    if (resultsArray.length > 0) {
+      resultsArray.forEach((result, index) => {
+        if (typeof result === 'object' && (result as any).type === 'chart') {
           const chartResource: WorkflowResource = {
             id: `${stepId}_chart_${index}`,
             type: 'chart',
-            title: result.title || `图表 ${index + 1}`,
+            title: (result as any).title || `图表 ${index + 1}`,
             description: `从步骤"${stepData.content}"中生成`,
             timestamp,
             data: {
-              title: result.title,
-              type: result.chartType || 'line',
-              imageUrl: result.imageUrl,
-              dataUrl: result.dataUrl,
+              title: (result as any).title,
+              type: (result as any).chartType || 'line',
+              imageUrl: (result as any).imageUrl,
+              dataUrl: (result as any).dataUrl,
               source: 'step_execution'
             },
             stepId,

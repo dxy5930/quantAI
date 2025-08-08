@@ -16,6 +16,9 @@ interface RequestConfig {
   };
 }
 
+// 新增：统一 API 前缀
+const API_PREFIX = import.meta.env.VITE_API_PREFIX || '/api/v1';
+
 export class HttpError extends Error {
   public statusCode: number;
   public errorCode?: number | string;
@@ -81,10 +84,13 @@ class HttpClient {
           '/auth/register', 
           '/auth/forgot-password',
           '/auth/reset-password',
+          // 新增：刷新接口免鉴权
+          '/auth/refresh',
           '/api/v1/auth/login',
           '/api/v1/auth/register',
           '/api/v1/auth/forgot-password', 
-          '/api/v1/auth/reset-password'
+          '/api/v1/auth/reset-password',
+          '/api/v1/auth/refresh'
         ];
         
         const needsAuth = !noAuthUrls.some(url => config.url?.includes(url));
@@ -123,9 +129,11 @@ class HttpClient {
       },
       async (error: AxiosError) => {
         const originalRequest = error.config as any;
+        const requestUrl: string | undefined = originalRequest?.url;
+        const isRefreshEndpoint = typeof requestUrl === 'string' && requestUrl.includes('/auth/refresh');
         
-        // 处理401无权限错误
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // 处理401无权限错误（避免对刷新接口再次触发刷新逻辑）
+        if (error.response?.status === 401 && !originalRequest._retry && !isRefreshEndpoint) {
           return this.handleUnauthorized(error, originalRequest);
         }
 
@@ -376,7 +384,8 @@ class HttpClient {
   }
 
   private async refreshAuthToken(refreshToken: string): Promise<any> {
-    return this.instance.post('/auth/refresh', { refreshToken: refreshToken });
+    // 修正：使用统一前缀与正确的参数名
+    return this.instance.post(`${API_PREFIX}/auth/refresh`, { refresh_token: refreshToken });
   }
 
   private redirectToLogin(): void {

@@ -6,6 +6,7 @@ import { ROUTES } from '../../constants/routes';
 import { useUserStore, useAppStore } from '../../hooks/useStore';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { Logo } from '../../components/common/Logo';
+import { message } from '../../utils/message';
 
 const LoginPage: React.FC = observer(() => {
   const userStore = useUserStore();
@@ -54,10 +55,13 @@ const LoginPage: React.FC = observer(() => {
       
       // 跳转到目标页面
       navigate(returnUrl, { replace: true });
-    } catch (error) {
-      // 错误通过Toast弹框显示
-      if (userStore.error) {
-        appStore.showError(userStore.error, '登录失败');
+    } catch (error: any) {
+      // 优先显示后端返回的 message
+      const backendMsg = error?.message || userStore.error;
+      if (backendMsg) {
+        appStore.showError(backendMsg, '登录失败');
+      } else {
+        message.handleApiError(error);
       }
       console.error('登录失败:', error);
     }

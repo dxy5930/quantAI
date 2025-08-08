@@ -38,56 +38,34 @@ export const message = {
 
   // 根据错误代码显示相应的错误信息
   errorByCode: (errorCode: ErrorCode | number | string, customMessage?: string, duration: number = 5000) => {
-    let title = '错误';
-    let content = customMessage || '操作失败';
-
-    // 根据错误代码设置不同的标题和默认消息
-    switch (errorCode) {
-      case ErrorCode.UNAUTHORIZED:
-      case ErrorCode.TOKEN_EXPIRED:
-        title = '认证失败';
-        content = customMessage || '登录已过期，请重新登录';
-        break;
-      case ErrorCode.PERMISSION_DENIED:
-        title = '权限不足';
-        content = customMessage || '您没有执行此操作的权限';
-        break;
-      case ErrorCode.VALIDATION_ERROR:
-        title = '参数错误';
-        content = customMessage || '请检查输入的参数是否正确';
-        break;
-      case ErrorCode.RESOURCE_NOT_FOUND:
-        title = '资源不存在';
-        content = customMessage || '请求的资源不存在';
-        break;
-      case ErrorCode.NETWORK_ERROR:
-        title = '网络错误';
-        content = customMessage || '网络连接失败，请检查网络连接';
-        break;
-      case ErrorCode.DATABASE_ERROR:
-        title = '数据库错误';
-        content = customMessage || '数据库操作失败，请稍后重试';
-        break;
-      case ErrorCode.EXTERNAL_SERVICE_ERROR:
-        title = '服务错误';
-        content = customMessage || '外部服务暂时不可用，请稍后重试';
-        break;
-      case ErrorCode.AI_SERVICE_UNAVAILABLE:
-        title = 'AI服务错误';
-        content = customMessage || 'AI分析服务暂时不可用，请稍后重试';
-        break;
-
-        break;
-      case ErrorCode.STOCK_NOT_FOUND:
-        title = '股票不存在';
-        content = customMessage || '找不到指定的股票信息';
-        break;
-      default:
-        title = '系统错误';
-        content = customMessage || '系统出现未知错误，请稍后重试';
+    // 优先显示自定义信息
+    if (customMessage) {
+      appStore.showError(customMessage, '错误', duration);
+      return;
     }
 
-    appStore.showError(content, title, duration);
+    // 基于错误码的兜底提示
+    const codeNum = typeof errorCode === 'string' ? parseInt(errorCode, 10) : (errorCode as number);
+    let content = '操作失败，请稍后重试';
+
+    switch (codeNum) {
+      case 11001:
+        content = '用户不存在';
+        break;
+      case 11002:
+        content = '密码错误';
+        break;
+      case 11003:
+        content = '账户已被禁用';
+        break;
+      case 11004:
+        content = '令牌已过期，请重新登录';
+        break;
+      default:
+        content = '操作失败，请稍后重试';
+    }
+
+    appStore.showError(content, '错误', duration);
   },
 
   // 处理API错误响应
@@ -95,10 +73,14 @@ export const message = {
     if (error && typeof error === 'object') {
       // 统一错误响应格式
       if ('success' in error && error.success === false) {
+        if (error.message) {
+          appStore.showError(error.message, '错误');
+          return;
+        }
         if (error.code) {
-          message.errorByCode(error.code, error.message);
+          message.errorByCode(error.code);
         } else {
-          message.error(error.message || '操作失败');
+          message.error('操作失败');
         }
         return;
       }
@@ -110,6 +92,12 @@ export const message = {
         } else {
           message.error(error.message);
         }
+        return;
+      }
+
+      // 如果是Axios错误结构，尝试读取 response.data.message
+      if (error.response?.data?.message) {
+        appStore.showError(error.response.data.message, '错误');
         return;
       }
     }

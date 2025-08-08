@@ -130,3 +130,21 @@ QWEN_TEMPERATURE=0.3
 5. **系统响应**: 右侧显示AI分析的具体过程和方法
 
 这个系统为用户提供了透明、交互式、专业的AI投资分析体验。 
+
+## 配置：是否在对话框显示执行步骤
+
+- 配置文件：`src/config/aiChatConfig.ts`
+- 选项：
+  - `showStepsInChat`: 是否在聊天消息区渲染每个执行步骤（默认 false）
+
+示例：
+
+```ts
+export const aiChatConfig = {
+  showStepsInChat: false,
+} as const;
+```
+
+说明：
+- 即使关闭对话区的步骤展示，右侧资源面板与数据库仍会实时接收并保存步骤与资源。
+- 如需恢复旧体验，将其设为 `true`。 

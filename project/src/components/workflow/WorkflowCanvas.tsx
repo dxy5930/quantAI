@@ -97,6 +97,31 @@ interface WorkflowCanvasProps {
   selectedNodeId?: string | null;
 }
 
+// 统一的步骤排序：按步骤号升序，其次按时间升序，保证展示稳定
+const sortSteps = (steps: ExecutionStep[]) => {
+  return [...steps].sort((a, b) => {
+    const byNo = (a.stepNumber || 0) - (b.stepNumber || 0);
+    if (byNo !== 0) return byNo;
+    const at = a.timestamp ? a.timestamp.getTime() : 0;
+    const bt = b.timestamp ? b.timestamp.getTime() : 0;
+    return at - bt;
+  });
+};
+
+// 历史/恢复消息的排序：优先按步骤号（若为步骤消息），否则按时间
+const sortMessagesForHistory = (messages: TaskMessage[]) => {
+  return [...messages].sort((a, b) => {
+    const aStep = a.data?.isStep ? (a.data?.step?.stepNumber || 0) : null;
+    const bStep = b.data?.isStep ? (b.data?.step?.stepNumber || 0) : null;
+    if (aStep !== null && bStep !== null && aStep !== bStep) {
+      return aStep - bStep;
+    }
+    const at = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+    const bt = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+    return at - bt;
+  });
+};
+
 export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({ 
   workflowId, 
   onNodeClick,
@@ -140,6 +165,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
               data: msg.data
             }))
           : [];
+        const sortedRestoredMessages = sortMessagesForHistory(restoredMessages);
         
         // 恢复步骤
         const restoredSteps: ExecutionStep[] = Array.isArray(workflowState.steps)
@@ -159,6 +185,9 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
               files: step.files || []
             }))
           : [];
+        
+        // 恢复后先排序，确保展示顺序稳定
+        const sortedRestoredSteps = sortSteps(restoredSteps);
         
         // 恢复资源到资源管理器
         if (Array.isArray(workflowState.resources)) {
@@ -184,8 +213,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
           });
         }
         
-        setMessages(restoredMessages);
-        setCurrentExecutionSteps(restoredSteps);
+        setMessages(sortedRestoredMessages);
+        setCurrentExecutionSteps(sortedRestoredSteps);
         
         // 恢复的工作流不应该立即设置为运行状态，因为没有活跃的流式连接
         // 用户需要手动输入新指令来继续工作流
@@ -234,23 +263,27 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
         
         if (historyData && historyData.steps && historyData.steps.length > 0) {
           // 将历史步骤转换为ExecutionStep格式
+          const maxStepNo = Math.max(...historyData.steps.map((s: any) => Number(s.step_number || 0)), 0);
+          const totalStepsFromWorkflow = Number(historyData.workflow.total_steps || 0);
+          const totalStepsSafe = Math.max(totalStepsFromWorkflow, maxStepNo) || maxStepNo || 1;
           const historicalSteps: ExecutionStep[] = historyData.steps.map((step: any) => ({
             id: step.step_id,
             content: step.content,
-            stepNumber: step.step_number,
-            totalSteps: historyData.workflow.total_steps || step.step_number,
+            stepNumber: Number(step.step_number || 0) || 1,
+            totalSteps: totalStepsSafe,
             category: step.category as ExecutionStep['category'],
             resourceType: step.resource_type as ExecutionStep['resourceType'],
             timestamp: new Date(step.created_at),
             isClickable: true,
             isCompleted: step.status === 'completed',
-            results: step.results || [],
+            results: Array.isArray(step.results) ? step.results : (step.results ? [step.results] : []),
             executionDetails: step.execution_details || {},
-            urls: step.urls || [],
-            files: step.files || []
+            urls: Array.isArray(step.urls) ? step.urls : (step.urls ? [step.urls] : []),
+            files: Array.isArray(step.files) ? step.files : (step.files ? [step.files] : [])
           }));
           
-          setCurrentExecutionSteps(historicalSteps);
+          // 历史步骤按顺序展示
+          setCurrentExecutionSteps(sortSteps(historicalSteps));
           console.log('加载历史步骤成功:', historicalSteps.length, '个步骤');
         }
         
@@ -266,7 +299,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
             data: msg.data
           }));
           
-          setMessages(historicalMessages);
+          setMessages(sortMessagesForHistory(historicalMessages));
           console.log('加载历史消息成功:', historicalMessages.length, '条消息');
         }
         
@@ -610,11 +643,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                   });
                   
                   const existing = updatedSteps.find(s => s.id === newStep.id);
-                  if (existing) {
-                    return updatedSteps.map(s => s.id === newStep.id ? newStep : s);
-                  } else {
-                    return [...updatedSteps, newStep];
-                  }
+                  const merged = existing
+                    ? updatedSteps.map(s => (s.id === newStep.id ? newStep : s))
+                    : [...updatedSteps, newStep];
+                  // 统一排序，避免乱序
+                  return sortSteps(merged);
                 });
                 
                 // 同步更新消息中的步骤状态
@@ -672,17 +705,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                   }
                 };
                 
-                setMessages(prev => {
-                  // 检查是否已存在相同步骤，如果存在则更新，否则添加
-                  const existingIndex = prev.findIndex(m => m.id === stepMessage.id);
-                  if (existingIndex !== -1) {
-                    const newMessages = [...prev];
-                    newMessages[existingIndex] = stepMessage;
-                    return newMessages;
-                  } else {
-                    return [...prev, stepMessage];
-                  }
-                });
+                
                 
                 // 通知右侧面板显示当前步骤，如果是第一个步骤则拉起面板
                 if ((window as any).updateWorkspacePanel) {
@@ -705,18 +728,24 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
               // 更新AI消息内容，确保AI消息在步骤消息之后
               if (chunk.content) {
                 setMessages(prev => {
+                  // 先去重（基于id）避免重复 key 警告
+                  const deduped = Array.from(new Map(prev.map(m => [m.id, m])).values());
                   // 找到AI消息和相关的步骤消息
-                  const aiMsgIndex = prev.findIndex(msg => msg.id === aiMessageId);
-                  const stepMessages = prev.filter(msg => 
-                    msg.data?.isStep && msg.data?.taskId === aiMessageId
-                  );
-                  const otherMessages = prev.filter(msg => 
+                  const aiMsgIndex = deduped.findIndex(msg => msg.id === aiMessageId);
+                  const stepMessages = deduped
+                    .filter(msg => msg.data?.isStep && msg.data?.taskId === aiMessageId)
+                    .sort((a, b) => {
+                      const as = a.data?.step?.stepNumber || 0;
+                      const bs = b.data?.step?.stepNumber || 0;
+                      return as - bs;
+                    });
+                  const otherMessages = deduped.filter(msg => 
                     msg.id !== aiMessageId && 
                     !(msg.data?.isStep && msg.data?.taskId === aiMessageId)
                   );
                   
                   if (aiMsgIndex !== -1) {
-                    const currentAiMsg = prev[aiMsgIndex];
+                    const currentAiMsg = deduped[aiMsgIndex];
                     // 如果当前内容是loading文本，则替换；否则追加
                     const isLoadingText = currentAiMsg.content === '正在思考中...' || currentAiMsg.content === '正在分析处理中...';
                     const newContent = isLoadingText ? (chunk.content || '') : currentAiMsg.content + (chunk.content || '');
@@ -724,8 +753,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                     const updatedAiMsg = {
                       ...currentAiMsg,
                       content: newContent,
-                      steps: currentExecutionSteps,
-                      currentStep: currentExecutionSteps[currentExecutionSteps.length - 1],
+                      steps: sortSteps(currentExecutionSteps),
+                      currentStep: sortSteps(currentExecutionSteps)[sortSteps(currentExecutionSteps).length - 1],
                       data: { 
                         ...currentAiMsg.data, 
                         isAssistantLoading: false // 收到内容时清除loading状态
@@ -736,7 +765,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                     return [...otherMessages, ...stepMessages, updatedAiMsg];
                   }
                   
-                  return prev;
+                  return deduped;
                 });
               }
               break;
@@ -750,44 +779,43 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
               })));
               
               setMessages(prev => {
-                const aiMsgIndex = prev.findIndex(msg => msg.id === aiMessageId);
-                const stepMessages = prev.filter(msg => 
-                  msg.data?.isStep && msg.data?.taskId === aiMessageId
-                ).map(msg => ({
-                  ...msg,
-                  content: msg.content.replace(/^正在/, '已完成'),
-                  data: {
-                    ...msg.data,
-                    step: msg.data?.step ? {
-                      ...msg.data.step,
-                      isCompleted: true,
-                      content: msg.data.step.content.replace(/^正在/, '已完成')
-                    } : msg.data?.step
-                  }
-                }));
-                const otherMessages = prev.filter(msg => 
+                // 先去重（基于id）避免重复 key 警告
+                const deduped = Array.from(new Map(prev.map(m => [m.id, m])).values());
+                const aiMsgIndex = deduped.findIndex(msg => msg.id === aiMessageId);
+                const stepMessages: TaskMessage[] = [];
+                const otherMessages = deduped.filter(msg => 
                   msg.id !== aiMessageId && 
                   !(msg.data?.isStep && msg.data?.taskId === aiMessageId) &&
                   !msg.data?.isLoading
                 );
                 
                 if (aiMsgIndex !== -1) {
+                  const sortedStepsFinal = sortSteps(currentExecutionSteps);
+                  // 汇总所有步骤的 results 展示到最终 AI 消息
+                  const allStepResults: any[] = sortedStepsFinal
+                    .map(s => (Array.isArray(s.results) ? s.results : (s.results ? [s.results] : [])))
+                    .flat();
+                  const prevAi = deduped[aiMsgIndex];
                   const completedAiMsg = {
-                    ...prev[aiMsgIndex],
+                    ...prevAi,
                     isComplete: true, 
                     isStreaming: false,
-                    steps: currentExecutionSteps.map(step => ({
+                    steps: sortedStepsFinal.map(step => ({
                       ...step,
                       isCompleted: true,
                       content: step.isCompleted ? step.content : step.content.replace(/^正在/, '已完成')
-                    }))
-                  };
+                    })),
+                    data: {
+                      ...(prevAi.data || {}),
+                      results: allStepResults
+                    }
+                  } as TaskMessage;
                   
-                  // 最终排序：其他消息 + 步骤消息 + 完成的AI消息
+                  // 最终排序：其他消息 +（可选）步骤消息 + 完成的AI消息
                   return [...otherMessages, ...stepMessages, completedAiMsg];
                 }
                 
-                return prev;
+                return deduped;
               });
               
               setCurrentExecutionSteps([]);
@@ -1358,54 +1386,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                   </div>
                 )} */}
                 
-                {/* 原有的执行步骤显示逻辑保持不变，但只对非步骤消息生效 */}
-                {!message.data?.isStep && message.steps && message.steps.length > 0 && (
-                  <div className="mt-3 p-3 bg-white dark:bg-slate-800 rounded border">
-                    <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 flex items-center">
-                      <Play className="w-3 h-3 mr-1" />
-                      执行步骤
-                    </div>
-                    <div className="space-y-2">
-                      {message.steps.map((step, index) => (
-                        <div
-                          key={step.id}
-                          className={`p-2 rounded text-sm transition-all cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700 ${
-                            selectedStep?.id === step.id 
-                              ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700' 
-                              : 'bg-gray-50 dark:bg-slate-700'
-                          }`}
-                          onClick={() => handleStepClick(step, message.id)}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                              <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">
-                                步骤 {step.stepNumber}
-                              </span>
-                              <span className={`text-xs px-2 py-1 rounded ${getStepCategoryClasses(step.category as StepCategory || 'general')}`}>
-                                {getStepCategoryConfig(step.category as StepCategory || 'general').label}
-                              </span>
-                              {step.resourceType && (
-                                <span className={`text-xs px-2 py-1 rounded ${getResourceTypeClasses(step.resourceType as ResourceType)}`}>
-                                  {getResourceTypeConfig(step.resourceType as ResourceType).label}
-                                </span>
-                              )}
-                              {/* 显示步骤完成状态 */}
-                              {step.isCompleted && (
-                                <CheckCircle className="w-3 h-3 text-green-600" />
-                              )}
-                            </div>
-                            <span className="text-xs text-gray-400">
-                              {formatTime(step.timestamp)}
-                            </span>
-                          </div>
-                          <div className="mt-1 text-gray-700 dark:text-gray-300">
-                            {step.content}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {/* 步骤列表渲染已移除（聊天中不再展示执行步骤） */}
                 
                 {message.data && !message.data.isStep && (
                   <div className="mt-3 p-2 bg-white dark:bg-slate-800 rounded border">

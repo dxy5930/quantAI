@@ -21,6 +21,7 @@ interface TaskContextType {
   updateTask: (taskId: string, updates: Partial<TaskItem>) => void;
   addTask: (task: TaskItem) => void;
   loadTasks: () => Promise<void>;
+  deleteTask: (taskId: string) => Promise<void>;
 }
 
 const TaskContext = createContext<TaskContextType | null>(null);
@@ -54,13 +55,32 @@ export const WorkflowPageLayout: React.FC = () => {
     setTasks(prev => [task, ...prev]);
   };
 
+  const deleteTask = async (taskId: string) => {
+    const previousTasks = tasks;
+    // 乐观更新：先从本地移除
+    setTasks(prev => prev.filter(t => t.id !== taskId));
+    try {
+      await workflowApi.deleteWorkflow(taskId);
+      // 如果当前选中的是被删除的任务，则清空选中
+      if (selectedWorkflowId === taskId) {
+        setSelectedWorkflowId(null);
+      }
+      // 可选刷新，保持与后端一致（此处省略以减少不必要请求）
+    } catch (error) {
+      console.error('软删除工作流失败:', error);
+      // 回滚本地状态
+      setTasks(previousTasks);
+      throw error;
+    }
+  };
+
   const loadTasks = async () => {
     try {
       setIsLoading(true);
       if (userStore.currentUser?.id) {
         const workflows = await workflowApi.getWorkflows({
           user_id: userStore.currentUser.id,
-          limit: 50
+          limit: 100
         });
         
         const formattedTasks: TaskItem[] = workflows.map(workflow => ({
@@ -100,7 +120,8 @@ export const WorkflowPageLayout: React.FC = () => {
     tasks,
     updateTask,
     addTask,
-    loadTasks
+    loadTasks,
+    deleteTask
   };
 
   return (

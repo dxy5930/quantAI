@@ -69,7 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = observer(
     const navigate = useNavigate();
     const userStore = useUserStore();
     const appStore = useAppStore();
-    const { tasks, addTask, updateTask, loadTasks } = useTaskContext();
+    const { tasks, addTask, updateTask, loadTasks, deleteTask } = useTaskContext();
     const [expandedItems, setExpandedItems] = useState<Set<string>>(
       new Set(["tasks"])
     );
@@ -355,11 +355,17 @@ export const Sidebar: React.FC<SidebarProps> = observer(
         completed: "text-green-500",
       }[task.status];
 
-      function handleDeleteTask(id: string): void {
-        console.log("删除任务:", id);
-        // 需要从Context中添加deleteTask方法
-        // 临时禁用删除功能，等待实现
-        alert("删除功能暂未实现");
+      async function handleDeleteTask(id: string): Promise<void> {
+        try {
+          await deleteTask(id);
+          // 如果当前在 AI 工作流页，删除后保持在该页，仅更新列表
+          if (location.pathname === ROUTES.AI_WORKFLOW) {
+            await loadTasks();
+          }
+        } catch (error) {
+          console.error('删除任务失败:', error);
+          alert('删除失败，请稍后重试');
+        }
       }
 
       return (
