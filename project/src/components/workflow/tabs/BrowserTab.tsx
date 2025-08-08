@@ -61,7 +61,12 @@ export const BrowserTab: React.FC<BrowserTabProps> = ({ taskContext }) => {
 
               <div className="flex items-center space-x-1 ml-2">
                 <button
-                  onClick={() => window.open(resource.url, "_blank")}
+                  onClick={() => {
+                    if (typeof resource.url === 'string' && resource.url.startsWith('http')) {
+                      const w = window.open(resource.url, '_blank', 'noopener,noreferrer');
+                      if (w) w.opener = null;
+                    }
+                  }}
                   className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
                   title="打开链接"
                 >

@@ -465,6 +465,7 @@ async def get_workflow_resources(workflow_id: str, db: Session = Depends(get_db)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取资源列表失败: {str(e)}")
 
+# 修复：保存资源时将业务stepId映射为步骤主键UUID
 @router.post("/workflows/{workflow_id}/resources")
 async def save_workflow_resource(workflow_id: str, request: dict, db: Session = Depends(get_db)):
     """保存工作流资源"""
@@ -485,21 +486,36 @@ async def save_workflow_resource(workflow_id: str, request: dict, db: Session = 
         }
         
         resource_type = resource_type_map.get(request.get('type', 'general'), WorkflowResourceType.GENERAL)
+
+        # 将业务stepId映射为步骤主键
+        step_pk = None
+        biz_step_id = request.get('stepId')
+        if biz_step_id:
+            step_row = db.query(WorkflowStep).filter(
+                and_(WorkflowStep.workflow_id == workflow_id, WorkflowStep.step_id == biz_step_id)
+            ).first()
+            step_pk = step_row.id if step_row else None
+        
+        resource_id = request.get('id') or str(uuid.uuid4())
+        # 如ID已被其他工作流占用，则换新ID，避免跨工作流污染
+        existing_by_id = db.query(WorkflowResource).filter(WorkflowResource.id == resource_id).first()
+        if existing_by_id and existing_by_id.workflow_id != workflow_id:
+            resource_id = str(uuid.uuid4())
         
         resource = WorkflowResource(
-            id=request.get('id', str(uuid.uuid4())),
+            id=resource_id,
             workflow_id=workflow_id,
-            step_id=request.get('stepId'),
+            step_id=step_pk,
             resource_type=resource_type,
             title=request.get('title', '未命名资源'),
             description=request.get('description'),
             data=request.get('data', {}),
             category=request.get('category'),
-            source_step_id=request.get('sourceStepId')
+            source_step_id=biz_step_id or request.get('sourceStepId')
         )
         
-        # 检查是否已存在相同ID的资源
-        existing = db.query(WorkflowResource).filter(WorkflowResource.id == resource.id).first()
+        # 检查是否已存在相同ID的资源（同一工作流）
+        existing = db.query(WorkflowResource).filter(WorkflowResource.id == resource.id, WorkflowResource.workflow_id == workflow_id).first()
         if existing:
             # 更新现有资源
             existing.title = resource.title
@@ -513,23 +529,22 @@ async def save_workflow_resource(workflow_id: str, request: dict, db: Session = 
         
         db.commit()
         
-        return {"message": "资源保存成功", "resource_id": resource.id}
+        return {"message": "保存成功", "resource_id": resource.id}
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"保存资源失败: {str(e)}")
 
+# 批量保存资源（同样修复stepId映射）
 @router.post("/workflows/{workflow_id}/resources/batch")
 async def save_workflow_resources_batch(workflow_id: str, request: List[dict], db: Session = Depends(get_db)):
-    """批量保存工作流资源"""
     try:
         # 检查工作流是否存在
         workflow = db.query(WorkflowInstance).filter(WorkflowInstance.id == workflow_id).first()
         if not workflow:
             raise HTTPException(status_code=404, detail="工作流不存在")
         
-        # 资源类型映射
         resource_type_map = {
             'web': WorkflowResourceType.WEB,
             'database': WorkflowResourceType.DATABASE,
@@ -543,29 +558,41 @@ async def save_workflow_resources_batch(workflow_id: str, request: List[dict], d
         for resource_data in request:
             resource_type = resource_type_map.get(resource_data.get('type', 'general'), WorkflowResourceType.GENERAL)
             
+            # 业务stepId -> 主键UUID
+            step_pk = None
+            biz_step_id = resource_data.get('stepId')
+            if biz_step_id:
+                step_row = db.query(WorkflowStep).filter(
+                    and_(WorkflowStep.workflow_id == workflow_id, WorkflowStep.step_id == biz_step_id)
+                ).first()
+                step_pk = step_row.id if step_row else None
+            
+            # 处理跨工作流重复ID
+            resource_id = resource_data.get('id') or str(uuid.uuid4())
+            existing_by_id = db.query(WorkflowResource).filter(WorkflowResource.id == resource_id).first()
+            if existing_by_id and existing_by_id.workflow_id != workflow_id:
+                resource_id = str(uuid.uuid4())
+            
             resource = WorkflowResource(
-                id=resource_data.get('id', str(uuid.uuid4())),
+                id=resource_id,
                 workflow_id=workflow_id,
-                step_id=resource_data.get('stepId'),
+                step_id=step_pk,
                 resource_type=resource_type,
                 title=resource_data.get('title', '未命名资源'),
                 description=resource_data.get('description'),
                 data=resource_data.get('data', {}),
                 category=resource_data.get('category'),
-                source_step_id=resource_data.get('sourceStepId')
+                source_step_id=biz_step_id or resource_data.get('sourceStepId')
             )
             
-            # 检查是否已存在相同ID的资源
-            existing = db.query(WorkflowResource).filter(WorkflowResource.id == resource.id).first()
+            existing = db.query(WorkflowResource).filter(WorkflowResource.id == resource.id, WorkflowResource.workflow_id == workflow_id).first()
             if existing:
-                # 更新现有资源
                 existing.title = resource.title
                 existing.description = resource.description
                 existing.data = resource.data
                 existing.category = resource.category
                 existing.updated_at = datetime.utcnow()
             else:
-                # 添加新资源
                 db.add(resource)
                 saved_count += 1
         

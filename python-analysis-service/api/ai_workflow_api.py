@@ -183,6 +183,38 @@ def generate_task_title_and_description(message: str) -> tuple[str, str]:
     
     return title, description
 
+# 为步骤补充可点击URL
+def enrich_steps_with_urls(steps: List[Dict[str, Any]], message: str) -> List[Dict[str, Any]]:
+    try:
+        from urllib.parse import quote
+        q = quote(message.strip())
+        default_urls = [
+            f"https://so.eastmoney.com/web/s?keyword={q}",
+            f"https://xueqiu.com/k?q={q}",
+            f"https://finance.sina.com.cn/search?search={q}"
+        ]
+        for step in steps or []:
+            urls = step.get('urls') or []
+            if not urls:
+                rt = (step.get('resourceType') or 'general').lower()
+                if rt == 'database':
+                    step['urls'] = [
+                        f"https://so.eastmoney.com/web/s?keyword={q}",
+                        "https://data.eastmoney.com/bbsj/",
+                        "https://quote.eastmoney.com/"
+                    ]
+                elif rt == 'api':
+                    step['urls'] = [
+                        "https://dashscope.console.aliyun.com/overview",
+                        "https://help.aliyun.com/zh/model-studio/getting-started/quick-start",
+                        default_urls[0]
+                    ]
+                else:  # browser/general/其他
+                    step['urls'] = default_urls
+        return steps
+    except Exception:
+        return steps
+
 # 请求模型
 class WorkflowStartRequest(BaseModel):
     workflow_id: str
@@ -1025,6 +1057,7 @@ async def generate_analysis_stream(message: str, context: Dict[str, Any], workfl
     
     # 使用AI智能生成分析步骤
     analysis_steps = await generate_smart_analysis_steps(message, context)
+    analysis_steps = enrich_steps_with_urls(analysis_steps, message)
     
     category = determine_step_category_from_message(message)
     
@@ -1154,10 +1187,10 @@ async def generate_analysis_stream(message: str, context: Dict[str, Any], workfl
                 timeout=30.0  # 30秒超时
             )
         except asyncio.TimeoutError:
-            print("通义千问分析API超时，使用降级回复")
+            print("通义千问分析API超时，使用降级回复 (fallback)")
             ai_response = None
         except Exception as api_error:
-            print(f"通义千问分析API调用失败: {api_error}")
+            print(f"通义千问分析API调用失败: {api_error}, 将使用fallback")
             ai_response = None
         
         if ai_response and ai_response.strip():
@@ -1193,7 +1226,7 @@ async def generate_analysis_stream(message: str, context: Dict[str, Any], workfl
                     await asyncio.sleep(0.05)  # 空行间隔很短
         else:
             # 降级回复
-            fallback_response = generate_fallback_analysis_response(message)
+            fallback_response = "【AI服务暂不可用，以下为降级分析框架】\n\n" + generate_fallback_analysis_response(message)
             
             # 【新增】保存降级回复到数据库
             if workflow_id:
@@ -1234,6 +1267,7 @@ async def generate_strategy_stream(message: str, context: Dict[str, Any], workfl
     
     # 使用AI智能生成策略步骤
     strategy_steps = await generate_smart_strategy_steps(message, context)
+    strategy_steps = enrich_steps_with_urls(strategy_steps, message)
     
     category = determine_step_category_from_message(message)
     
@@ -1338,7 +1372,7 @@ async def generate_strategy_stream(message: str, context: Dict[str, Any], workfl
                     await asyncio.sleep(0.05)
         else:
             # 降级回复
-            fallback_response = generate_fallback_strategy_response(message)
+            fallback_response = "【AI服务暂不可用，以下为降级策略框架】\n\n" + generate_fallback_strategy_response(message)
             yield f"data: {json.dumps({'type': 'content', 'content': fallback_response, 'stepId': 'fallback_strategy'})}\n\n"
 
 
@@ -1353,6 +1387,7 @@ async def generate_general_stream(message: str, context: Dict[str, Any], workflo
     
     # 使用AI智能生成通用步骤
     general_steps = await generate_smart_general_steps(message, context)
+    general_steps = enrich_steps_with_urls(general_steps, message)
     
     category = determine_step_category_from_message(message)
     
@@ -1822,7 +1857,11 @@ async def generate_smart_analysis_steps(message: str, context: Dict[str, Any]) -
                     "resourceType": "browser",
                     "results": ["市场趋势", "热点机会", "专家观点"],
                     "executionDetails": {"source": "财经媒体", "focus": "投资机会"},
-                    "urls": [],
+                    "urls": [
+                        "https://finance.sina.com.cn/news/",
+                        "https://wallstreetcn.com/",
+                        "https://www.yicai.com/"
+                    ],
                     "files": []
                 },
                 {
@@ -2041,7 +2080,11 @@ async def generate_smart_strategy_steps(message: str, context: Dict[str, Any]) -
                     "resourceType": "browser",
                     "results": ["市场趋势", "投资机会", "专家观点"],
                     "executionDetails": {"source": "投研报告", "focus": "市场机会"},
-                    "urls": [],
+                    "urls": [
+                        "https://finance.qq.com/",
+                        "https://wallstreetcn.com/",
+                        "https://www.yicai.com/"
+                    ],
                     "files": []
                 },
                 {

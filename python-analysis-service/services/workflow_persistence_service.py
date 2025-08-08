@@ -141,20 +141,39 @@ class WorkflowPersistenceService:
             print(f"   步骤数据: urls={len(step_data.get('urls', []))}, files={len(step_data.get('files', []))}, executionDetails={bool(step_data.get('executionDetails'))}")
             
             resource_count = 0
+
+            # 将业务stepId(如 step_1) 映射为步骤表主键UUID
+            step_pk = None
+            try:
+                step_row = self.db.query(WorkflowStep).filter(
+                    WorkflowStep.workflow_id == workflow_id,
+                    WorkflowStep.step_id == step_id
+                ).first()
+                step_pk = step_row.id if step_row else None
+            except Exception as _e:
+                logger.warning(f"查询步骤主键失败，将以NULL保存资源外键: {step_id}, 错误: {_e}")
             
             # 保存URL资源
             if step_data.get('urls'):
                 print(f"   保存 {len(step_data['urls'])} 个URL资源")
                 for url in step_data['urls']:
+                    # 生成更友好的标题
+                    try:
+                        from urllib.parse import urlparse
+                        parsed = urlparse(url)
+                        host = parsed.netloc or '网页资源'
+                        title = f"{host} - 相关链接"
+                    except Exception:
+                        title = f"网页资源 - {url}"
                     resource = WorkflowResource(
                         id=str(uuid.uuid4()),
                         workflow_id=workflow_id,
-                        step_id=step_id,
+                        step_id=step_pk,
                         resource_type=WorkflowResourceType.WEB,
-                        title=f"网页资源 - {url}",
+                        title=title,
                         description=f"从步骤中获取的网页链接",
                         data={'url': url},
-                        source_step_id=step_data.get('stepId')
+                        source_step_id=step_data.get('stepId', step_id)
                     )
                     self.db.add(resource)
                     resource_count += 1
@@ -166,12 +185,12 @@ class WorkflowPersistenceService:
                     resource = WorkflowResource(
                         id=str(uuid.uuid4()),
                         workflow_id=workflow_id,
-                        step_id=step_id,
+                        step_id=step_pk,
                         resource_type=WorkflowResourceType.FILE,
                         title=f"文件 - {file_path.split('/')[-1]}",
                         description=f"从步骤中生成的文件",
                         data={'file_path': file_path},
-                        source_step_id=step_data.get('stepId')
+                        source_step_id=step_data.get('stepId', step_id)
                     )
                     self.db.add(resource)
                     resource_count += 1
@@ -186,17 +205,28 @@ class WorkflowPersistenceService:
                     'browser': WorkflowResourceType.WEB
                 }
                 
+                # 根据是否包含可点击链接智能降级资源类型，避免前端 about:blank
                 res_type = resource_type_map.get(step_data.get('resourceType'), WorkflowResourceType.GENERAL)
+                if res_type == WorkflowResourceType.WEB:
+                    has_url = False
+                    try:
+                        # details 里可能包含 url 字段
+                        has_url = isinstance(details, dict) and bool(details.get('url'))
+                    except Exception:
+                        has_url = False
+                    # 如果没有url，降级为 GENERAL，真正的链接会在上方通过 urls 单独入库
+                    if not has_url:
+                        res_type = WorkflowResourceType.GENERAL
                 
                 resource = WorkflowResource(
                     id=str(uuid.uuid4()),
                     workflow_id=workflow_id,
-                    step_id=step_id,
+                    step_id=step_pk,
                     resource_type=res_type,
                     title=f"{step_data.get('resourceType', '通用')}资源 - {step_data.get('content', '')[:30]}",
                     description=step_data.get('content'),
                     data=details,
-                    source_step_id=step_data.get('stepId')
+                    source_step_id=step_data.get('stepId', step_id)
                 )
                 self.db.add(resource)
                 resource_count += 1

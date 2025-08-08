@@ -70,7 +70,7 @@ interface ExecutionStep {
 }
 
 interface StreamChunk {
-  type: 'start' | 'content' | 'progress' | 'complete' | 'error' | 'task_info' | 'workflow_created' | 'workflow_updated';
+  type: 'start' | 'content' | 'progress' | 'complete' | 'error' | 'task_info' | 'workflow_created' | 'workflow_updated' | 'resource_updated';
   content?: string;
   step?: number;
   totalSteps?: number;
@@ -1351,12 +1351,12 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                 </div>
                 
                 {/* 只有步骤完成后才显示查看详情提示 */}
-                {message.data?.isStep && message.data?.step?.isCompleted && (
+                {/* {message.data?.isStep && message.data?.step?.isCompleted && (
                   <div className="mt-2 text-xs text-blue-600 dark:text-blue-400 flex items-center">
                     <Play className="w-3 h-3 mr-1" />
                     点击查看执行详情 →
                   </div>
-                )}
+                )} */}
                 
                 {/* 原有的执行步骤显示逻辑保持不变，但只对非步骤消息生效 */}
                 {!message.data?.isStep && message.steps && message.steps.length > 0 && (

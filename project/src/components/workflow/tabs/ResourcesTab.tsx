@@ -45,15 +45,12 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
   const [resources, setResources] = useState<WorkflowResource[]>([]);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [remoteResources, setRemoteResources] = useState<WorkflowResource[]>([]);
-  // 【移除】不再需要的消息时间戳状态，改为纯SSE推送
-  // const [lastMessageTimestamp, setLastMessageTimestamp] = useState<string | null>(null);
-  // 【新增】实时轮询控制
-  const [isRealTimeEnabled, setIsRealTimeEnabled] = useState<boolean>(true);
+  // 【移除】实时轮询控制与开关
+  // const [isRealTimeEnabled, setIsRealTimeEnabled] = useState<boolean>(true);
 
   // 获取远程资源的函数
   const fetchRemoteResources = useCallback(async () => {
     if (!workflowId) return;
-    
     try {
       setIsRefreshing(true);
       const response = await workflowApi.getWorkflowResources(workflowId);
@@ -62,7 +59,7 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
         type: r.resource_type,
         title: r.title,
         description: r.description,
-        timestamp: new Date(r.created_at),
+        timestamp: new Date(r.created_at || Date.now()),
         data: r.data,
         category: r.category,
         sourceStepId: r.source_step_id
@@ -75,127 +72,42 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
     }
   }, [workflowId]);
 
-  // 实时轮询资源更新 - 更频繁的轮询
+  // 初始化与切换workflow时拉取一次
   useEffect(() => {
     if (!workflowId) return;
-    
-    // 立即获取一次资源
     fetchRemoteResources();
-    
-    // 【修改】简化为仅初始加载和手动刷新，实时更新通过SSE推送
-    // 移除轮询机制，减少服务器压力，完全依赖SSE推送
-    
   }, [workflowId, fetchRemoteResources]);
 
-  // 【简化】移除复杂的消息检查轮询，改为纯SSE推送响应
-  // checkForUpdates函数已不再需要
-
-  // 【新增】注册全局刷新函数，供SSE事件调用
+  // 注册全局刷新函数，供SSE事件调用（始终刷新）
   useEffect(() => {
-    // 注册全局刷新函数
     (window as any).workflowResourceRefresh = () => {
-      if (workflowId && isRealTimeEnabled) {
+      if (workflowId) {
         console.log('SSE触发工作流资源实时刷新');
         fetchRemoteResources();
       }
     };
-
-    // 清理函数
     return () => {
       if ((window as any).workflowResourceRefresh) {
         delete (window as any).workflowResourceRefresh;
       }
     };
-  }, [workflowId, isRealTimeEnabled, fetchRemoteResources]);
+  }, [workflowId, fetchRemoteResources]);
 
-  // 【新增】当工作流状态变化时，重新启用实时轮询
+  // 当工作流状态变化时，确保刷新可用
   useEffect(() => {
     if (workflowId) {
-      setIsRealTimeEnabled(true);
-      // setLastMessageTimestamp(null); // 移除此行
+      // nothing，保持实时
     }
   }, [workflowId]);
 
-  // 聚合所有类型的资源
+  // 聚合资源：仅使用远程资源（去除本地上下文和临时资源，避免重复）
   useEffect(() => {
     const allResources: WorkflowResource[] = [];
-    
-    // 添加远程工作流资源
-    if (remoteResources.length > 0) {
-      allResources.push(...remoteResources);
-    }
-    
-    // 添加传入的本地资源
-    if (workflowResources.length > 0) {
-      // 过滤掉重复的资源（基于ID）
-      const existingIds = new Set(allResources.map(r => r.id));
-      const uniqueWorkflowResources = workflowResources.filter(r => !existingIds.has(r.id));
-      allResources.push(...uniqueWorkflowResources);
-    }
-    
-    // 从任务上下文添加资源
-    if (taskContext) {
-      // Web资源
-      const webResources: WorkflowResource[] = taskContext.webResources?.map(web => ({
-        id: web.id,
-        type: 'web' as const,
-        title: web.title,
-        description: web.description,
-        timestamp: web.timestamp,
-        data: {
-          url: web.url,
-          status: web.status,
-          description: web.description
-        },
-        workflowId: workflowId || '',
-        category: 'browser'
-      })) || [];
-
-      // Database资源
-      const databaseResources: WorkflowResource[] = taskContext.databases?.map(db => ({
-        id: db.id,
-        type: 'database' as const,
-        title: db.name,
-        description: db.description,
-        timestamp: new Date(),
-        data: {
-          tables: db.tables,
-          queryUrl: db.queryUrl,
-          description: db.description
-        },
-        workflowId: workflowId || '',
-        category: 'database'
-      })) || [];
-
-      // API资源
-      const apiResources: WorkflowResource[] = taskContext.apis?.map(api => ({
-        id: api.id,
-        type: 'api' as const,
-        title: api.name,
-        description: api.description,
-        timestamp: new Date(),
-        data: {
-          endpoint: api.endpoint,
-          method: api.method,
-          documentation: api.documentation,
-          description: api.description
-        },
-        workflowId: workflowId || '',
-        category: 'api'
-      })) || [];
-
-      // 过滤重复资源并添加
-      const existingIds = new Set(allResources.map(r => r.id));
-      const contextResources = [...webResources, ...databaseResources, ...apiResources];
-      const uniqueContextResources = contextResources.filter(r => !existingIds.has(r.id));
-      allResources.push(...uniqueContextResources);
-    }
-    
-    // 按时间戳降序排序（最新的在前）
+    if (remoteResources.length > 0) allResources.push(...remoteResources);
+    // 不再合并workflowResources与taskContext，避免显示示例/重复数据
     allResources.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-    
     setResources(allResources);
-  }, [remoteResources, workflowResources, taskContext, workflowId]);
+  }, [remoteResources]);
 
   // 过滤资源
   const filteredResources = filterType === 'all' 
@@ -244,12 +156,21 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
   };
 
   const handleResourceClick = (resource: WorkflowResource) => {
-    if (resource.type === 'web' && resource.data.url) {
-      window.open(resource.data.url, '_blank');
+    if (resource.type === 'web' && typeof resource.data?.url === 'string' && resource.data.url.startsWith('http')) {
+      const w = window.open(resource.data.url, '_blank', 'noopener,noreferrer');
+      if (w) w.opener = null;
     } else if (resource.type === 'file' && resource.data.downloadUrl) {
-      window.open(resource.data.downloadUrl, '_blank');
+      const url = resource.data.downloadUrl || resource.data.file_path;
+      if (typeof url === 'string' && url) {
+        const w = window.open(url, '_blank', 'noopener,noreferrer');
+        if (w) w.opener = null;
+      }
     } else if (resource.type === 'api' && resource.data.documentation) {
-      window.open(resource.data.documentation, '_blank');
+      const docUrl = resource.data.documentation;
+      if (typeof docUrl === 'string' && docUrl.startsWith('http')) {
+        const w = window.open(docUrl, '_blank', 'noopener,noreferrer');
+        if (w) w.opener = null;
+      }
     }
   };
 
@@ -276,34 +197,22 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <h3 className="font-medium text-gray-900 dark:text-white">工作流资源</h3>
         <div className="flex items-center space-x-2">
-          {/* 【新增】实时更新开关 */}
-          <button
-            onClick={() => setIsRealTimeEnabled(!isRealTimeEnabled)}
-            className={`p-1 rounded transition-colors ${
-              isRealTimeEnabled 
-                ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400' 
-                : 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500'
-            }`}
-            title={isRealTimeEnabled ? '实时更新已启用' : '实时更新已禁用'}
-          >
-            <div className={`w-2 h-2 rounded-full ${isRealTimeEnabled ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
-          </button>
-          
+          {/* 实时指示点（无开关） */}
+          <div className="p-1 rounded bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400" title="实时更新">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+          </div>
           <button 
             onClick={fetchRemoteResources}
-            disabled={isRefreshing}
+            disabled={isRefreshing || !workflowId}
             className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-50"
-            title="手动刷新资源列表"
+            title={!workflowId ? '请先选择左侧工作流' : '手动刷新资源列表'}
           >
             <RefreshCw className={`w-4 h-4 text-gray-400 ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
           {isRefreshing && (
             <span className="text-xs text-gray-500">更新中...</span>
           )}
-          {/* 【新增】实时状态指示 */}
-          {isRealTimeEnabled && (
-            <span className="text-xs text-green-600 dark:text-green-400">实时</span>
-          )}
+          <span className="text-xs text-green-600 dark:text-green-400">实时</span>
         </div>
       </div>
 
@@ -407,7 +316,11 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.open(resource.data.url, '_blank');
+                        const url = resource.data?.url;
+                        if (typeof url === 'string' && url.startsWith('http')) {
+                          const w = window.open(url, '_blank', 'noopener,noreferrer');
+                          if (w) w.opener = null;
+                        }
                       }}
                       className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
                       title="打开链接"
@@ -420,7 +333,11 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.open(resource.data.downloadUrl, '_blank');
+                        const url = resource.data?.downloadUrl || resource.data?.file_path;
+                        if (typeof url === 'string' && url) {
+                          const w = window.open(url, '_blank', 'noopener,noreferrer');
+                          if (w) w.opener = null;
+                        }
                       }}
                       className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
                       title="下载文件"
