@@ -31,6 +31,9 @@ import {
   type ResourceType,
   type StepCategory 
 } from '../../constants/workflowConfig';
+import { MarkdownRenderer } from '../common/MarkdownRenderer';
+import ChatMessageItem, { ExecutionStep as InlineStep } from './ChatMessageItem';
+
 
 interface TaskMessage {
   id: string;
@@ -46,11 +49,67 @@ interface TaskMessage {
     step?: ExecutionStep;
     category?: string;
     results?: string[];
+    relatedStepId?: string; // 新增：关联的步骤ID
+    progressLines?: string[]; // 新增：进度行
   };
   isComplete?: boolean;
   isStreaming?: boolean;
   steps?: ExecutionStep[];
   currentStep?: ExecutionStep;
+}
+
+// 合并历史中的分段助手消息（message_id 形如 `${aiId}_content_xxx`）
+function mergeStreamingAssistantRawMessages(rawMessages: any[]): any[] {
+  if (!Array.isArray(rawMessages) || rawMessages.length === 0) return rawMessages || [];
+  // 先按时间排序，保证合并顺序正确
+  const sorted = [...rawMessages].sort((a, b) => {
+    const at = new Date(a.created_at || a.timestamp || 0).getTime();
+    const bt = new Date(b.created_at || b.timestamp || 0).getTime();
+    return at - bt;
+  });
+
+  const contentGroups = new Map<string, { parts: string[]; sample: any; lastTime: string }>();
+  const others: any[] = [];
+
+  for (const msg of sorted) {
+    const mid: string = msg.message_id || msg.id || '';
+    const isAssistant = (msg.message_type || msg.type) === 'assistant';
+    const m = typeof mid === 'string' ? mid.match(/^(.+)_content_/i) : null;
+    if (isAssistant && m) {
+      const base = m[1];
+      const g = contentGroups.get(base) || { parts: [] as string[], sample: msg, lastTime: (msg.created_at || msg.timestamp) as string };
+      if (msg.content && typeof msg.content === 'string') g.parts.push(msg.content);
+      g.lastTime = msg.created_at || msg.timestamp || g.lastTime;
+      contentGroups.set(base, g);
+    } else {
+      others.push(msg);
+    }
+  }
+
+  // 移除原有的 base 结尾消息（如“分析完成”），用合并后的替换
+  const cleaned = others.filter(m => {
+    const mid: string = m.message_id || m.id || '';
+    return !contentGroups.has(mid); // 若为base本体，则丢弃，稍后用合并内容替换
+  });
+
+  for (const [base, g] of contentGroups.entries()) {
+    const merged = {
+      ...(g.sample || {}),
+      message_id: base,
+      message_type: 'assistant',
+      content: g.parts.join('\n\n'),
+      status: 'completed',
+      timestamp: g.lastTime || (g.sample ? g.sample.timestamp : undefined),
+      created_at: g.lastTime || (g.sample ? g.sample.created_at : undefined),
+      data: {
+        ...(g.sample?.data || {}),
+        type: 'content'
+      }
+    };
+    cleaned.push(merged);
+  }
+
+  return cleaned;
 }
 
 interface ExecutionStep {
@@ -81,6 +140,7 @@ interface StreamChunk {
   executionDetails?: Record<string, any>; // 新增：执行详情
   urls?: string[]; // 新增：URL列表
   files?: string[]; // 新增：文件列表
+  status?: 'running' | 'completed' | 'thinking'; // 新增：步骤状态
   error?: string;
   // 任务信息
   taskTitle?: string;
@@ -89,6 +149,11 @@ interface StreamChunk {
   workflow_id?: string;
   title?: string;
   description?: string;
+  // 新增：来自后端SSE的扩展字段
+  trigger?: string;
+  messageId?: string;
+  workflowId?: string;
+  stepNumber?: number;
 }
 
 interface WorkflowCanvasProps {
@@ -140,6 +205,22 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
   const isUnmountingRef = useRef(false);
   const currentConnectionIdRef = useRef<string | null>(null);
 
+  // 辅助：从URL生成简短标题
+  const formatUrlTitle = (url: string) => {
+    try {
+      const u = new URL(url);
+      return `${u.hostname}${u.pathname}`;
+    } catch {
+      return url;
+    }
+  };
+
+  // 辅助：从文件路径提取文件名
+  const getFilename = (path: string) => {
+    const parts = path.split('/');
+    return parts[parts.length - 1] || path;
+  };
+
   // 调试：显示当前workflowId
   React.useEffect(() => {
     console.log('WorkflowCanvas接收到的workflowId:', workflowId);
@@ -162,12 +243,19 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
               content: msg.content,
               timestamp: new Date(msg.timestamp),
               status: msg.status as any,
-              data: msg.data
+              data: {
+                ...(msg.data || {}),
+                // 归一：后端若提供 stepId，则作为关联ID参与排序
+                relatedStepId: (msg.data && (msg.data.relatedStepId || msg.data.stepId)) || undefined,
+                // 归一：支持后端提供的顺序号
+                sequence: (msg.data && msg.data.sequence) || (typeof (msg as any).sequence === 'number' ? (msg as any).sequence : undefined)
+              }
             }))
           : [];
-        const sortedRestoredMessages = sortMessagesForHistory(restoredMessages);
-        
-        // 恢复步骤
+        // 合并历史中的分段助手消息（不再在前端排序，保持后端顺序）
+        const mergedMessages = mergeStreamingAssistantRawMessages(restoredMessages) as any[];
+           
+         // 恢复步骤
         const restoredSteps: ExecutionStep[] = Array.isArray(workflowState.steps)
           ? workflowState.steps.map(step => ({
               id: step.step_id,
@@ -213,7 +301,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
           });
         }
         
-        setMessages(sortedRestoredMessages);
+        setMessages(mergedMessages as unknown as TaskMessage[]);
         setCurrentExecutionSteps(sortedRestoredSteps);
         
         // 恢复的工作流不应该立即设置为运行状态，因为没有活跃的流式连接
@@ -296,10 +384,16 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
             timestamp: new Date(msg.created_at),
             isComplete: msg.status === 'completed',
             isStreaming: false,
-            data: msg.data
+            data: {
+              ...(msg.data || {}),
+              relatedStepId: (msg.data && (msg.data.relatedStepId || msg.data.stepId)) || undefined,
+              sequence: (msg.data && msg.data.sequence) || (typeof (msg as any).sequence === 'number' ? (msg as any).sequence : undefined)
+            }
           }));
           
-          setMessages(sortMessagesForHistory(historicalMessages));
+          // 合并历史中的分段助手消息
+          const mergedMessages = mergeStreamingAssistantRawMessages(historicalMessages) as any[];
+          setMessages(mergedMessages as unknown as TaskMessage[]);
           console.log('加载历史消息成功:', historicalMessages.length, '条消息');
         }
         
@@ -337,6 +431,29 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
         }
       ]);
     }
+  }, [workflowId]);
+
+  // 暴露全局追加日志函数（仅作用于当前 workflowId）
+  useEffect(() => {
+    (window as any).appendWorkflowLog = (payload: { workflowId?: string | null; content: string }) => {
+      try {
+        const { workflowId: wid, content } = payload || ({} as any);
+        if (!content) return;
+        if (!wid || wid === workflowId) {
+          const logMsg: TaskMessage = {
+            id: `log-${Date.now()}`,
+            type: 'system',
+            content: content,
+            timestamp: new Date(),
+            data: { isStep: false }
+          };
+          setMessages(prev => [...prev, logMsg]);
+        }
+      } catch {}
+    };
+    return () => {
+      if ((window as any).appendWorkflowLog) delete (window as any).appendWorkflowLog;
+    };
   }, [workflowId]);
 
   // 组件挂载时重置卸载状态
@@ -469,7 +586,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
       isComplete: false,
       isStreaming: true,
       data: {
-        isAssistantLoading: true // 标识助手正在loading
+        isAssistantLoading: true, // 标识助手正在loading
+        progressLines: [
+          `正在思考：${generateCompactTitleFromFirstSentence(message)}`
+        ]
       }
     };
 
@@ -562,7 +682,13 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                   ? { 
                       ...msg, 
                       content: '正在分析处理中...', // 更新为实际的处理状态
-                      data: { ...msg.data, isAssistantLoading: false } // 清除loading状态
+                      data: { 
+                        ...msg.data, 
+                        isAssistantLoading: false,
+                        progressLines: Array.isArray((msg.data as any)?.progressLines) 
+                          ? (msg.data as any).progressLines 
+                          : [`正在思考：${generateCompactTitleFromFirstSentence(message)}`]
+                      } // 清除loading状态并确保进度行存在
                     }
                   : msg
               ));
@@ -586,6 +712,18 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                 });
               }
 
+              // 新增：在对话中加入“开始思考”提示
+              // setMessages(prev => [
+              //   ...prev,
+              //   {
+              //     id: `thinking-start-${Date.now()}`,
+              //     type: 'system',
+              //     content: '开始思考',
+              //     timestamp: new Date(),
+              //     data: { isStep: false }
+              //   }
+              // ]);
+
               console.log('任务开始，已清除loading状态');
               break;
               
@@ -600,24 +738,65 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
               break;
               
             case 'progress':
-              // 更新进度信息和执行步骤
-              if (chunk.step && chunk.totalSteps && chunk.content) {
+              // 更新进度信息和执行步骤（就地替换，不新增多条消息）
+              if (chunk.step && chunk.totalSteps && (chunk.content || chunk.status)) {
+                // 更新Coze风格进度行
+                const stepKey = String(chunk.stepId || `step_${chunk.step}`);
+                const runningText = chunk.status === 'thinking' || chunk.status === 'running';
+                const baseText = (chunk.content || `第${chunk.step}步`);
+                const runningLine = `正在${baseText}`;
+                const doneLine = `${baseText} 已完成`;
+
+                setMessages(prev => prev.map(m => {
+                  if (m.id !== aiMessageId) return m;
+                  const data: any = { ...(m.data || {}) };
+                  const lines: string[] = Array.isArray(data.progressLines) ? [...data.progressLines] : [];
+                  const runningMap: Record<string, number> = data._progressRunningIndex || {};
+                  const doneMap: Record<string, boolean> = data._progressDone || {};
+
+                  if (runningText) {
+                    // 首次出现该步骤时追加“正在…”，后续保持不改写
+                    if (runningMap[stepKey] === undefined) {
+                      runningMap[stepKey] = lines.length;
+                      if (!lines.includes(runningLine)) lines.push(runningLine);
+                    }
+                  } else {
+                    // 完成时仅追加“…已完成”，不改写“正在…”行
+                    if (!doneMap[stepKey]) {
+                      if (!lines.includes(doneLine)) lines.push(doneLine);
+                      doneMap[stepKey] = true;
+                    }
+                  }
+
+                  return {
+                    ...m,
+                    data: { ...data, progressLines: lines, _progressRunningIndex: runningMap, _progressDone: doneMap }
+                  } as TaskMessage;
+                }));
                 // 如果是第一个步骤，清除AI消息的loading状态
                 if (chunk.step === 1) {
                   setMessages(prev => prev.map(msg => 
                     msg.id === aiMessageId 
                       ? { 
                           ...msg, 
-                          content: '', // 清空loading文本
+                          // 保留占位文案，避免出现空白气泡
+                          content: msg.content && msg.content.trim() ? msg.content : '正在分析处理中...',
                           data: { ...msg.data, isAssistantLoading: false } 
                         }
                       : msg
                   ));
                 }
                 
+                const stepId = chunk.stepId || `step_${chunk.step}`;
+                const isCompletedNow = chunk.status === 'completed';
+                const isThinking = chunk.status === 'thinking';
+                const stepText = isThinking
+                  ? `正在思考：${chunk.content || ''}`
+                  : (chunk.content || '');
+                
                 const newStep: ExecutionStep = {
-                  id: chunk.stepId || `step_${chunk.step}`,
-                  content: chunk.content,
+                  id: stepId,
+                  content: stepText,
                   stepNumber: chunk.step,
                   totalSteps: chunk.totalSteps,
                   category: (chunk.category as ExecutionStep['category']) || 'general',
@@ -628,50 +807,59 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                   files: chunk.files || [],
                   timestamp: new Date(),
                   isClickable: true,
-                  isCompleted: false // 新步骤默认未完成
+                  isCompleted: !!isCompletedNow
                 };
                 
+                // 更新步骤集合（同 stepId / stepNumber 就地替换）
                 setCurrentExecutionSteps(prev => {
-                  // 标记之前的步骤为已完成，并更新文案
-                  const updatedSteps = prev.map(step => {
-                    if (step.stepNumber < newStep.stepNumber && !step.isCompleted) {
-                      return {
-                        ...step,
-                        isCompleted: true,
-                        content: step.content.replace(/^正在/, '已完成') // 将"正在xxx"改为"已完成xxx"
-                      };
-                    }
-                    return step;
+                  const updated = prev.map(s => {
+                    const same = (s.id && s.id === newStep.id) || (!!s.stepNumber && s.stepNumber === newStep.stepNumber);
+                    if (!same) return s;
+                    // 替换为最新状态与内容
+                    return { ...newStep };
                   });
-                  
-                  const existing = updatedSteps.find(s => s.id === newStep.id);
-                  const merged = existing
-                    ? updatedSteps.map(s => (s.id === newStep.id ? newStep : s))
-                    : [...updatedSteps, newStep];
-                  // 统一排序，避免乱序
+                  const exists = updated.some(s => s.id === newStep.id || s.stepNumber === newStep.stepNumber);
+                  const merged = exists ? updated : [...updated, newStep];
                   return sortSteps(merged);
                 });
                 
-                // 同步更新消息中的步骤状态
-                setMessages(prev => prev.map(msg => {
-                  if (msg.data?.isStep && msg.data?.step && msg.data.step.stepNumber < newStep.stepNumber && !msg.data.step.isCompleted) {
+                // 同步更新聊天中的步骤消息（若已存在同一步骤，则替换内容与完成态；否则插入一条步骤消息）
+                setMessages(prev => {
+                  const stepMsgId = `step-${stepId}`;
+                  let found = false;
+                  const replaced = prev.map(m => {
+                    if (m.id !== stepMsgId) return m;
+                    found = true;
                     return {
-                      ...msg,
-                      content: msg.content.replace(/^正在/, '已完成'),
+                      ...m,
+                      content: newStep.content,
                       data: {
-                        ...msg.data,
-                        step: {
-                          ...msg.data.step,
-                          isCompleted: true,
-                          content: msg.data.step.content.replace(/^正在/, '已完成')
-                        }
+                        ...(m.data || {}),
+                        isStep: true,
+                        step: newStep,
+                        taskId: aiMessageId,
+                        category: newStep.category
                       }
-                    };
-                  }
-                  return msg;
-                }));
+                    } as TaskMessage;
+                  });
+                  if (found) return replaced;
+                  // 插入新的步骤消息（保持后端顺序：追加在末尾）
+                  const stepMessage: TaskMessage = {
+                    id: stepMsgId,
+                    type: 'system',
+                    content: newStep.content,
+                    timestamp: new Date(),
+                    data: {
+                      isStep: true,
+                      step: newStep,
+                      taskId: aiMessageId,
+                      category: newStep.category
+                    }
+                  };
+                  return [...replaced, stepMessage];
+                });
                 
-                // 添加资源到资源管理器
+                // 添加资源消息保持不变
                 if (workflowId) {
                   workflowResourceManager.addResourcesFromStep(
                     workflowId,
@@ -686,36 +874,18 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                       files: newStep.files
                     }
                   );
-                  
-                  // 【新增】立即触发右侧资源列表刷新
                   if ((window as any).workflowResourceRefresh) {
                     (window as any).workflowResourceRefresh();
                   }
                 }
-
-                // 将新步骤作为独立的系统消息添加到对话中
-                const stepMessage: TaskMessage = {
-                  id: `step-${newStep.id}`,
-                  type: 'system',
-                  content: newStep.content,
-                  timestamp: new Date(),
-                  data: {
-                    isStep: true,
-                    step: newStep,
-                    taskId: aiMessageId,
-                    category: newStep.category
-                  }
-                };
                 
-                
-                
-                // 通知右侧面板显示当前步骤，如果是第一个步骤则拉起面板
+                // 通知右侧面板当前步骤
                 if ((window as any).updateWorkspacePanel) {
                   (window as any).updateWorkspacePanel({
                     type: 'current_step',
                     step: newStep,
                     taskId: aiMessageId,
-                    isFirstStep: newStep.stepNumber === 1, // 标识是否为第一个步骤
+                    isFirstStep: newStep.stepNumber === 1,
                     resourceType: newStep.resourceType,
                     results: newStep.results,
                     executionDetails: newStep.executionDetails,
@@ -727,53 +897,31 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
               break;
               
             case 'content':
-              // 更新AI消息内容，确保AI消息在步骤消息之后
+              // 更新AI消息内容，保持原有消息相对顺序
               if (chunk.content) {
                 setMessages(prev => {
-                  // 先去重（基于id）避免重复 key 警告
-                  const deduped = Array.from(new Map(prev.map(m => [m.id, m])).values());
-                  // 找到AI消息和相关的步骤消息
-                  const aiMsgIndex = deduped.findIndex(msg => msg.id === aiMessageId);
-                  const stepMessages = deduped
-                    .filter(msg => msg.data?.isStep && msg.data?.taskId === aiMessageId)
-                    .sort((a, b) => {
-                      const as = a.data?.step?.stepNumber || 0;
-                      const bs = b.data?.step?.stepNumber || 0;
-                      return as - bs;
-                    });
-                  const otherMessages = deduped.filter(msg => 
-                    msg.id !== aiMessageId && 
-                    !(msg.data?.isStep && msg.data?.taskId === aiMessageId)
-                  );
-                  
-                  if (aiMsgIndex !== -1) {
-                    const currentAiMsg = deduped[aiMsgIndex];
-                    // 如果当前内容是loading文本，则替换；否则追加
-                    const isLoadingText = currentAiMsg.content === '正在思考中...' || currentAiMsg.content === '正在分析处理中...';
-                    const newContent = isLoadingText ? (chunk.content || '') : currentAiMsg.content + (chunk.content || '');
-                    
-                    const updatedAiMsg = {
-                      ...currentAiMsg,
+                  const updated = prev.map(msg => {
+                    if (msg.id !== aiMessageId) return msg;
+                    const isLoadingText = msg.content === '正在思考中...' || msg.content === '正在分析处理中...';
+                    const newContent = isLoadingText ? (chunk.content || '') : (msg.content + (chunk.content || ''));
+                    return {
+                      ...msg,
                       content: newContent,
                       steps: sortSteps(currentExecutionSteps),
                       currentStep: sortSteps(currentExecutionSteps)[sortSteps(currentExecutionSteps).length - 1],
-                      data: { 
-                        ...currentAiMsg.data, 
-                        isAssistantLoading: false // 收到内容时清除loading状态
+                      data: {
+                        ...msg.data,
+                        isAssistantLoading: false
                       }
-                    };
-                    
-                    // 重新排序：其他消息 + 步骤消息 + AI消息
-                    return [...otherMessages, ...stepMessages, updatedAiMsg];
-                  }
-                  
-                  return deduped;
+                    } as TaskMessage;
+                  });
+                  return updated;
                 });
               }
               break;
               
             case 'complete':
-              // 完成流式响应，标记最后一个步骤为已完成，重新整理消息顺序
+              // 完成流式响应：就地更新 AI 消息，保持原顺序
               setCurrentExecutionSteps(prev => prev.map(step => ({
                 ...step,
                 isCompleted: true,
@@ -781,49 +929,51 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
               })));
               
               setMessages(prev => {
-                // 先去重（基于id）避免重复 key 警告
-                const deduped = Array.from(new Map(prev.map(m => [m.id, m])).values());
-                const aiMsgIndex = deduped.findIndex(msg => msg.id === aiMessageId);
-                const stepMessages: TaskMessage[] = [];
-                const otherMessages = deduped.filter(msg => 
-                  msg.id !== aiMessageId && 
-                  !(msg.data?.isStep && msg.data?.taskId === aiMessageId) &&
-                  !msg.data?.isLoading
-                );
-                
-                if (aiMsgIndex !== -1) {
-                  const sortedStepsFinal = sortSteps(currentExecutionSteps);
-                  // 汇总所有步骤的 results 展示到最终 AI 消息
-                  const allStepResults: any[] = sortedStepsFinal
-                    .map(s => (Array.isArray(s.results) ? s.results : (s.results ? [s.results] : [])))
-                    .flat();
-                  const prevAi = deduped[aiMsgIndex];
-                  const completedAiMsg = {
-                    ...prevAi,
-                    isComplete: true, 
+                const sortedStepsFinal = sortSteps(currentExecutionSteps).map(step => ({
+                  ...step,
+                  isCompleted: true,
+                  content: step.isCompleted ? step.content : step.content.replace(/^正在/, '已完成')
+                }));
+                const allStepResults: any[] = sortedStepsFinal
+                  .map(s => (Array.isArray(s.results) ? s.results : (s.results ? [s.results] : [])))
+                  .flat();
+                return prev.map(msg => {
+                  if (msg.id !== aiMessageId) return msg;
+                  // 不改写“正在…”行，仅追加“报告已生成”
+                  const data: any = { ...(msg.data || {}) };
+                  const lines: string[] = Array.isArray(data.progressLines) ? [...data.progressLines] : [];
+                  if (!lines.includes('报告已生成')) lines.push('报告已生成');
+                  return {
+                    ...msg,
+                    isComplete: true,
                     isStreaming: false,
-                    steps: sortedStepsFinal.map(step => ({
-                      ...step,
-                      isCompleted: true,
-                      content: step.isCompleted ? step.content : step.content.replace(/^正在/, '已完成')
-                    })),
+                    steps: sortedStepsFinal,
                     data: {
-                      ...(prevAi.data || {}),
-                      results: allStepResults
+                      ...(data || {}),
+                      results: allStepResults,
+                      isAssistantLoading: false,
+                      progressLines: lines
                     }
                   } as TaskMessage;
-                  
-                  // 最终排序：其他消息 +（可选）步骤消息 + 完成的AI消息
-                  return [...otherMessages, ...stepMessages, completedAiMsg];
-                }
-                
-                return deduped;
+                });
               });
               
               setCurrentExecutionSteps([]);
               setCurrentTaskId(null);
               setIsStreaming(false);
               setIsRunning(false);
+              
+              // 新增：在对话中加入“总结分析”提示
+              // setMessages(prev => [
+              //   ...prev,
+              //   {
+              //     id: `thinking-summary-${Date.now()}`,
+              //     type: 'system',
+              //     content: '总结分析',
+              //     timestamp: new Date(),
+              //     data: { isStep: false }
+              //   }
+              // ]);
               
               // 任务完成后，生成更精准的工作流标题和描述
               if (workflowId && (window as any).updateSidebarTask) {
@@ -840,6 +990,34 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                     return currentMessages;
                   });
                 }, 100);
+              }
+
+              // 新增：将AI最终内容导出为 Markdown 文件并加入右侧资源
+              try {
+                // 再次从最新messages中获取AI消息内容
+                setTimeout(async () => {
+                  const latest = (function collectLatest(ms: TaskMessage[]) {
+                    return ms.find(m => m.id === aiMessageId);
+                  })(messages as any);
+                  const finalContent = latest?.content || '';
+                  if (workflowId && finalContent) {
+                    const mdText = `# 分析总结\n\n${finalContent}`;
+                    const blob = new Blob([mdText], { type: 'text/markdown;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const filename = `analysis_${new Date().toISOString().replace(/[:.]/g, '-')}.md`;
+                    await (workflowResourceManager as any).addLocalFileResource({
+                      workflowId,
+                      title: '分析报告（Markdown）',
+                      filename,
+                      fileUrl: url,
+                      description: 'AI 分析的 Markdown 导出，可下载保存',
+                      category: 'general',
+                      stepId: aiMessageId
+                    });
+                  }
+                }, 200);
+              } catch (e) {
+                console.warn('导出Markdown资源失败:', e);
               }
               
               // 安全关闭连接
@@ -875,6 +1053,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
               if ((window as any).workflowResourceRefresh) {
                 (window as any).workflowResourceRefresh();
               }
+              // 不再向对话追加“资源已更新”提示，保持界面简洁
               break;
               
             case 'error':
@@ -888,7 +1067,14 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                       isComplete: true, 
                       isStreaming: false,
                       steps: currentExecutionSteps,
-                      data: { ...msg.data, isAssistantLoading: false } // 清除loading状态
+                      data: { 
+                        ...msg.data, 
+                        isAssistantLoading: false, 
+                        progressLines: [
+                          ...((msg.data as any)?.progressLines || []),
+                          `❌ 出错：${chunk.error}`
+                        ]
+                      } // 清除loading状态并记录错误
                     }
                   : msg
               ));
@@ -1314,166 +1500,59 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
 
 
 
-      {/* 消息列表 */}
+      {/* 消息列表（精简：Coze 风格） */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-elegant">
         {messages.map((message) => (
-          <div key={message.id} className="flex items-start space-x-3">
-            <div className="flex-shrink-0 mt-1">
-              {getMessageIcon(message)}
-            </div>
-            
-            <div className="flex-1 min-w-0">
-              <div 
-                className={`p-3 rounded-lg border ${getMessageBgColor(message)} ${
-                  message.type === 'task' || message.data?.isStep ? 'cursor-pointer hover:shadow-md transition-shadow' : ''
-                }`}
-                onClick={() => {
-                  if (message.type === 'task') {
-                    handleTaskClick(message);
-                  } else if (message.data?.isStep) {
-                    handleStepMessageClick(message);
-                  }
-                }}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                      {message.data?.isLoading ? '系统' :
-                       message.data?.isAssistantLoading ? '助手' :
-                       message.data?.isStep ? '执行步骤' :
-                       message.type === 'user' ? '用户' : 
-                       message.type === 'system' ? '系统' :
-                       message.type === 'task' ? '任务' : 
-                       message.type === 'assistant' ? '助手' : '结果'}
-                    </span>
-                    {message.data?.isLoading && (
-                      <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded animate-pulse">
-                        正在处理
-                      </span>
-                    )}
-                    {message.data?.isAssistantLoading && (
-                      <span className="text-xs bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 px-2 py-1 rounded animate-pulse flex items-center space-x-1">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        <span>思考中</span>
-                      </span>
-                    )}
-                    {message.data?.isStep && (
-                      <>
-                        <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">
-                          {message.data.step?.stepNumber}/{message.data.step?.totalSteps}
-                        </span>
-                        <span className={`text-xs px-2 py-1 rounded ${getStepCategoryClasses(message.data.category as StepCategory || 'general')}`}>
-                          {getStepCategoryConfig(message.data.category as StepCategory || 'general').label}
-                        </span>
-                        {message.data.step?.resourceType && (
-                          <span className={`text-xs px-2 py-1 rounded ${getResourceTypeClasses(message.data.step.resourceType as ResourceType)}`}>
-                            {getResourceTypeConfig(message.data.step.resourceType as ResourceType).label}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  <span className="text-xs text-gray-400">
-                    {formatTime(message.timestamp)}
-                  </span>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <p className="text-gray-900 dark:text-white whitespace-pre-wrap flex-1">
-                    {message.data?.isAssistantLoading ? (
-                      <span className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="animate-pulse">正在分析您的问题...</span>
-                      </span>
-                    ) : (
-                      message.content
-                    )}
-                  </p>
-                  
-                  {/* 步骤消息右侧显示loading或完成状态 */}
-                  {message.data?.isStep && (
-                    <div className="flex-shrink-0 ml-3">
-                      {message.data?.step?.isCompleted ? (
-                        <CheckCircle className="w-4 h-4 text-green-600" />
-                      ) : (
-                        <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
-                      )}
-                    </div>
-                  )}
-                </div>
-                
-                {/* 只有步骤完成后才显示查看详情提示 */}
-                {/* {message.data?.isStep && message.data?.step?.isCompleted && (
-                  <div className="mt-2 text-xs text-blue-600 dark:text-blue-400 flex items-center">
-                    <Play className="w-3 h-3 mr-1" />
-                    点击查看执行详情 →
-                  </div>
-                )} */}
-                
-                {/* 步骤列表渲染已移除（聊天中不再展示执行步骤） */}
-                
-                {message.data && !message.data.isStep && (
-                  <div className="mt-3 p-2 bg-white dark:bg-slate-800 rounded border">
-                    <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
-                      执行结果
-                    </div>
-                    {message.data.results && (
-                      <ul className="space-y-1">
-                        {message.data.results.map((result: string, index: number) => (
-                          <li key={index} className="text-sm text-gray-700 dark:text-gray-300">
-                            • {result}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <ChatMessageItem
+            key={message.id}
+            message={{
+              ...message,
+              currentStep: message.currentStep as InlineStep | undefined,
+              steps: message.steps as InlineStep[] | undefined,
+            }}
+            onStepClick={(step) => handleStepClick(step as any, message.id)}
+          />
         ))}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 输入区域 */}
+      {/* 输入区域：Coze 风格底栏 */}
       {workflowId && (
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-800">
-          <div className="flex items-center space-x-3">
-            <div className="flex-1">
-              <textarea
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="输入任务指令..."
-                rows={2}
-                disabled={isRunning || isStreaming}
-                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg resize-none bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed scrollbar-thin"
-              />
-            </div>
-            
-            <button
-              onClick={handleSendMessage}
-              disabled={!inputMessage.trim() || isRunning || isStreaming}
-              className="p-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex-shrink-0"
-              title="发送指令"
-            >
-              {isStreaming ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-            </button>
-            
-            {/* 强制停止按钮 */}
-            {(isStreaming || isRunning) && (
+        <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-900">
+          <div className="flex items-center gap-3">
+            <input
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
+              placeholder="输入内容，按 Enter 发送"
+              disabled={isRunning || isStreaming}
+              className="flex-1 h-10 px-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+            />
+            {(isStreaming || isRunning) ? (
               <button
                 onClick={forceStopAllConnections}
-                className="p-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex-shrink-0"
-                title="强制停止所有连接"
+                className="h-10 px-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                title="停止"
               >
                 <X className="w-5 h-5" />
               </button>
+            ) : (
+              <button
+                onClick={handleSendMessage}
+                disabled={!inputMessage.trim()}
+                className="h-10 px-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                title="发送"
+              >
+                <Send className="w-5 h-5" />
+              </button>
             )}
           </div>
-          
         </div>
-        
       )}
     </div>
   );

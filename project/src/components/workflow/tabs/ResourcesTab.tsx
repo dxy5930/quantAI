@@ -11,7 +11,11 @@ import {
   RefreshCw,
   Filter,
   Calendar,
-  Clock
+  Clock,
+  Copy,
+  Code,
+  Play,
+  Table as TableIcon
 } from 'lucide-react';
 import { TaskContext, WebResource, DatabaseResource, ApiResource, FileResource, ChartResource } from '../types';
 import { workflowApi } from '../../../services/workflowApi';
@@ -45,8 +49,49 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
   const [resources, setResources] = useState<WorkflowResource[]>([]);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [remoteResources, setRemoteResources] = useState<WorkflowResource[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   // 【移除】实时轮询控制与开关
   // const [isRealTimeEnabled, setIsRealTimeEnabled] = useState<boolean>(true);
+
+  // 记录上次已知资源ID集合，用于检测新增
+  const prevResourceIdsRef = React.useRef<Set<string>>(new Set());
+
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {}
+  };
+
+  const buildCurl = (resource: any) => {
+    try {
+      const method = String(resource?.data?.method || 'GET').toUpperCase();
+      const endpoint = String(resource?.data?.endpoint || resource?.data?.url || '');
+      let cmd = `curl -X ${method} '${endpoint}'`;
+      const headers = resource?.data?.headers || {};
+      const headerParts = Object.entries(headers).map(([k, v]) => `-H '${k}: ${v}'`);
+      if (headerParts.length > 0) cmd += ' ' + headerParts.join(' ');
+      const body = resource?.data?.body;
+      if (body && method !== 'GET') {
+        cmd += ` -H 'Content-Type: application/json' -d '${JSON.stringify(body)}'`;
+      }
+      return cmd;
+    } catch {
+      return 'curl --help';
+    }
+  };
+
+  const renderJsonPreview = (obj: any) => {
+    try {
+      const text = JSON.stringify(obj, null, 2);
+      return (
+        <pre className="mt-2 text-xs bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded p-2 overflow-x-auto">
+          <code>{text}</code>
+        </pre>
+      );
+    } catch {
+      return null;
+    }
+  };
 
   // 获取远程资源的函数
   const fetchRemoteResources = useCallback(async () => {
@@ -64,7 +109,25 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
         category: r.category,
         sourceStepId: r.source_step_id
       }));
+
+      // 检测新增项
+      const prevIds = prevResourceIdsRef.current;
+      const currentIds = new Set<string>(transformedResources.map((r: any) => String(r.id)));
+      const newItems = transformedResources.filter((r: any) => !prevIds.has(String(r.id)));
+      // 更新引用
+      prevResourceIdsRef.current = currentIds;
+
       setRemoteResources(transformedResources);
+
+      // 如有新增，通知聊天区
+      if (newItems.length > 0 && (window as any).appendWorkflowLog) {
+        const names = newItems.slice(0, 3).map((r: any) => r.title || r.id);
+        const more = newItems.length > 3 ? ` 等共 ${newItems.length} 条` : '';
+        (window as any).appendWorkflowLog({
+          workflowId,
+          content: `资源新增：${names.join('、')}${more}`
+        });
+      }
     } catch (error) {
       console.error('获取工作流资源失败:', error);
     } finally {
@@ -75,6 +138,8 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
   // 初始化与切换workflow时拉取一次
   useEffect(() => {
     if (!workflowId) return;
+    // 切换工作流时清空已知集合，避免跨工作流误判
+    prevResourceIdsRef.current = new Set();
     fetchRemoteResources();
   }, [workflowId, fetchRemoteResources]);
 
@@ -336,9 +401,22 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
                       </div>
                     )}
                     
-                    {resource.type === 'database' && resource.data.tables && (
-                      <div className="text-xs text-gray-400">
-                        表数量: {resource.data.tables.length}
+                    {resource.type === 'database' && (
+                      <div className="text-xs text-gray-400 flex items-center flex-wrap gap-1">
+                        <TableIcon className="w-3 h-3 mr-1" />
+                        {Array.isArray(resource.data?.tables) && resource.data.tables.length > 0 ? (
+                          <>
+                            <span>表:</span>
+                            {resource.data.tables.slice(0, 6).map((t: any, idx: number) => (
+                              <span key={idx} className="px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">{String(t)}</span>
+                            ))}
+                            {resource.data.tables.length > 6 && (
+                              <span className="text-gray-400">…{resource.data.tables.length - 6}更多</span>
+                            )}
+                          </>
+                        ) : (
+                          <span>数据源: {String(resource.data?.name || '未知')}</span>
+                        )}
                       </div>
                     )}
                     
@@ -348,12 +426,12 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
                       </div>
                     )}
                     
-                    {resource.type === 'file' && (
-                      <div className="flex items-center space-x-1 text-xs text-gray-400">
-                        <Download className="w-3 h-3" />
-                        <span>{resource.data.size}</span>
+                    {resource.type === 'chart' && resource.data?.imageUrl && (
+                      <div className="mt-2">
+                        <img src={resource.data.imageUrl} alt={resource.title} className="max-h-40 rounded border border-gray-200 dark:border-gray-700" />
                       </div>
                     )}
+
                   </div>
 
                   {/* 时间戳 */}
@@ -365,6 +443,15 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
 
                 {/* 操作按钮 */}
                 <div className="flex items-center space-x-1 ml-2">
+                  {(resource.type === 'api' || resource.type === 'database') && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === resource.id ? null : resource.id); }}
+                      className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
+                      title={expandedId === resource.id ? '收起详情' : '查看详情'}
+                    >
+                      <Code className="w-3 h-3 text-gray-400" />
+                    </button>
+                  )}
                   {resource.type === 'web' && (
                     <button
                       onClick={(e) => {
@@ -398,8 +485,111 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
                       <Download className="w-3 h-3 text-gray-400" />
                     </button>
                   )}
+
+                  {resource.type === 'chart' && (resource.data?.imageUrl || resource.data?.dataUrl) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const url = resource.data?.imageUrl || resource.data?.dataUrl;
+                        if (typeof url === 'string') {
+                          const w = window.open(url, '_blank', 'noopener,noreferrer');
+                          if (w) w.opener = null;
+                        }
+                      }}
+                      className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
+                      title="下载图表"
+                    >
+                      <Download className="w-3 h-3 text-gray-400" />
+                    </button>
+                  )}
                 </div>
               </div>
+
+              {/* 详情展开区：API / 数据库 */}
+              {expandedId === resource.id && (
+                <div className="mt-3 border-t border-dashed border-gray-200 dark:border-gray-700 pt-3 text-xs">
+                  {resource.type === 'api' && (
+                    <div className="space-y-2">
+                      <div className="flex items-center flex-wrap gap-2">
+                        <span className="px-2 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 font-mono">{String(resource.data?.method || 'GET')}</span>
+                        <span className="font-mono break-all">{String(resource.data?.endpoint || resource.data?.url || '')}</span>
+                      </div>
+                      {resource.data?.params && (
+                        <div>
+                          <div className="text-gray-500 mb-1">请求参数</div>
+                          {renderJsonPreview(resource.data.params)}
+                        </div>
+                      )}
+                      {(resource.data?.sampleResponse || resource.data?.response || resource.data?.example) && (
+                        <div>
+                          <div className="text-gray-500 mb-1">响应示例</div>
+                          {renderJsonPreview(resource.data.sampleResponse || resource.data.response || resource.data.example)}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+                          onClick={(e) => { e.stopPropagation(); copyText(buildCurl(resource)); }}
+                          title="复制 cURL"
+                        >
+                          <span className="inline-flex items-center gap-1"><Copy className="w-3 h-3"/>复制 cURL</span>
+                        </button>
+                        {resource.data?.documentation && (
+                          <button
+                            className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+                            onClick={(e) => { e.stopPropagation(); const w = window.open(resource.data.documentation, '_blank', 'noopener,noreferrer'); if (w) w.opener = null; }}
+                            title="打开文档"
+                          >
+                            <span className="inline-flex items-center gap-1"><ExternalLink className="w-3 h-3"/>文档</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {resource.type === 'database' && (
+                    <div className="space-y-2">
+                      <div className="text-gray-500">数据源：{String(resource.data?.name || '未知')}</div>
+                      {Array.isArray(resource.data?.tables) && resource.data.tables.length > 0 && (
+                        <div>
+                          <div className="text-gray-500 mb-1">表列表</div>
+                          <div className="flex flex-wrap gap-1">
+                            {resource.data.tables.map((t: any, idx: number) => (
+                              <span key={idx} className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200">{String(t)}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {resource.data?.preview && (
+                        <div>
+                          <div className="text-gray-500 mb-1">数据预览</div>
+                          {renderJsonPreview(resource.data.preview)}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        {resource.data?.queryUrl && (
+                          <button
+                            className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+                            onClick={(e) => { e.stopPropagation(); const w = window.open(resource.data.queryUrl, '_blank', 'noopener,noreferrer'); if (w) w.opener = null; }}
+                            title="打开查询页面"
+                          >
+                            <span className="inline-flex items-center gap-1"><ExternalLink className="w-3 h-3"/>打开查询</span>
+                          </button>
+                        )}
+                        {resource.data?.dsn && (
+                          <button
+                            className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+                            onClick={(e) => { e.stopPropagation(); copyText(String(resource.data.dsn)); }}
+                            title="复制连接串"
+                          >
+                            <span className="inline-flex items-center gap-1"><Copy className="w-3 h-3"/>复制连接</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))
         )}

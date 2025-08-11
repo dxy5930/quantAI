@@ -412,45 +412,7 @@ export const Sidebar: React.FC<SidebarProps> = observer(
                 )}
               </div>
               
-              {isEditing ? (
-                <div className="mb-2">
-                  <textarea
-                    value={editingDescription}
-                    onChange={(e) => setEditingDescription(e.target.value)}
-                    onKeyDown={(e) => handleKeyPress(e, true)}
-                    className="w-full text-xs bg-transparent border border-blue-500 rounded p-1 text-gray-500 dark:text-gray-400 focus:outline-none resize-none"
-                    rows={2}
-                    placeholder="描述..."
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <div className="flex justify-end space-x-1 mt-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSaveEdit();
-                      }}
-                      className="p-1 hover:bg-green-100 dark:hover:bg-green-900 rounded"
-                      title="保存"
-                    >
-                      <Check className="w-3 h-3 text-green-600" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCancelEdit();
-                      }}
-                      className="p-1 hover:bg-red-100 dark:hover:bg-red-900 rounded"
-                      title="取消"
-                    >
-                      <X className="w-3 h-3 text-red-600" />
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
-                  {task.description}
-                </p>
-              )}
+              {/* 描述已移除 */}
               
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                 {task.createdAt.toLocaleString()}

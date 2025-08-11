@@ -187,6 +187,60 @@ class WorkflowResourceManager {
     this.persistResourcesToDatabase(workflowId, workflowResources);
   }
 
+  // 直接添加本地字符串为文件资源（例如导出的 Markdown 报告）
+  async addLocalFileResource(params: {
+    workflowId: string;
+    title: string;
+    filename: string;
+    fileUrl: string; // 可为 blob:url 或已上传后的可下载 URL
+    description?: string;
+    category?: string;
+    stepId?: string;
+  }) {
+    const list = this.resources.get(params.workflowId) || [];
+    const resource: WorkflowResource = {
+      id: `${params.stepId || 'local'}_file_${Date.now()}`,
+      type: 'file',
+      title: params.title || params.filename,
+      description: params.description,
+      timestamp: new Date(),
+      data: {
+        downloadUrl: params.fileUrl,
+        name: params.filename,
+        type: this.extractFileType(params.filename),
+        size: '未知',
+        source: 'local_export'
+      },
+      stepId: params.stepId,
+      category: params.category,
+      workflowId: params.workflowId,
+      resourceType: 'general',
+      executionDetails: {}
+    };
+    list.push(resource);
+    this.resources.set(params.workflowId, list);
+
+    try {
+      await workflowApi.saveWorkflowResource(params.workflowId, {
+        id: resource.id,
+        type: 'file',
+        title: resource.title,
+        description: resource.description,
+        data: resource.data,
+        category: resource.category,
+        stepId: resource.stepId,
+        sourceStepId: resource.stepId
+      });
+    } catch (e) {
+      console.error('保存导出文件资源失败:', e);
+    }
+
+    // 触发右侧刷新
+    if (typeof window !== 'undefined' && (window as any).workflowResourceRefresh) {
+      (window as any).workflowResourceRefresh();
+    }
+  }
+
   // 异步持久化资源到数据库
   private async persistResourcesToDatabase(workflowId: string, resources: WorkflowResource[]) {
     if (resources.length === 0) return;
