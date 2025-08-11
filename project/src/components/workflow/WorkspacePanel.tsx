@@ -90,9 +90,9 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = observer(({
   return (
     <div className="h-full flex flex-col">
       {/* Python API状态显示 */}
-      <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+      {/* <div className="p-3 border-b border-gray-200 dark:border-gray-700">
         <PythonApiStatus />
-      </div>
+      </div> */}
 
       {/* 直接显示工作流资源列表 */}
       <div className="flex-1 overflow-y-auto scrollbar-thin">

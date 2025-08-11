@@ -537,11 +537,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
               // 处理工作流创建确认
               console.log('工作流已创建并落库:', chunk);
               if ((window as any).updateSidebarTask && chunk.workflow_id) {
-                (window as any).updateSidebarTask(
-                  chunk.workflow_id, 
-                  chunk.title || '新建工作流...', 
-                  chunk.description || '正在生成工作流描述...'
-                );
+                const title = generateCompactTitleFromFirstSentence(message);
+                (window as any).updateSidebarTask(chunk.workflow_id, title);
               }
               break;
 
@@ -549,11 +546,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
               // 处理工作流更新确认
               console.log('工作流标题和描述已更新:', chunk);
               if ((window as any).updateSidebarTask && chunk.workflow_id) {
-                (window as any).updateSidebarTask(
-                  chunk.workflow_id, 
-                  chunk.title, 
-                  chunk.description
-                );
+                const title = generateCompactTitleFromFirstSentence(message);
+                (window as any).updateSidebarTask(chunk.workflow_id, title);
               }
               break;
 
@@ -573,6 +567,16 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                   : msg
               ));
 
+              // 基于用户原始问题，先生成一个更贴近的临时标题/简介，避免通用标题
+              try {
+                if (workflowId && (window as any).updateSidebarTask && typeof message === 'string') {
+                  const title = generateCompactTitleFromFirstSentence(message);
+                  (window as any).updateSidebarTask(workflowId, title);
+                }
+              } catch (e) {
+                console.warn('预更新任务标题失败:', e);
+              }
+
               // 通知右侧面板任务开始，拉起面板
               if ((window as any).updateWorkspacePanel) {
                 (window as any).updateWorkspacePanel({
@@ -588,12 +592,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
             case 'task_info':
               // 处理任务信息，更新左侧任务列表
               console.log('接收到任务信息:', chunk.taskTitle, chunk.taskDescription);
-              if (chunk.taskTitle && chunk.taskDescription && workflowId) {
-                // 更新侧边栏中的任务名称和描述
-                if ((window as any).updateSidebarTask) {
-                  (window as any).updateSidebarTask(workflowId, chunk.taskTitle, chunk.taskDescription);
-                  console.log('已更新任务信息:', chunk.taskTitle, chunk.taskDescription);
-                }
+              if (workflowId && (window as any).updateSidebarTask) {
+                const title = generateCompactTitleFromFirstSentence(message);
+                (window as any).updateSidebarTask(workflowId, title);
+                console.log('已更新任务标题(基于首句):', title);
               }
               break;
               
@@ -830,11 +832,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                   setMessages(currentMessages => {
                     const aiMsg = currentMessages.find(msg => msg.id === aiMessageId);
                     if (aiMsg && aiMsg.content) {
-                      // 基于AI回复内容生成精准的标题和描述
-                      const { title, description } = generateFinalWorkflowTitle(message, aiMsg.content);
-                      
-                      console.log('任务完成，更新最终标题:', title, description);
-                      (window as any).updateSidebarTask(workflowId, title, description);
+                      // 最终标题：仅取用户首句的浓缩
+                      const title = generateCompactTitleFromFirstSentence(message);
+                      console.log('任务完成，更新最终标题:', title);
+                      (window as any).updateSidebarTask(workflowId, title);
                     }
                     return currentMessages;
                   });
@@ -1007,6 +1008,29 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    }
+  };
+
+  // 基于用户首句生成简洁标题（不保存简介）
+  const generateCompactTitleFromFirstSentence = (text: string) => {
+    try {
+      if (!text) return '新任务';
+      // 取首句
+      const firstSentence = (text || '')
+        .split(/[\n。！？.!?]/)[0]
+        .trim();
+      // 去掉常见客套或无效前缀
+      const cleaned = firstSentence
+        .replace(/^请?帮?我?(分析|看看|推荐|筛选|找找|找一下|研究|处理|查询|总结)?/,'')
+        .replace(/^想要?/,'')
+        .replace(/^需要?/,'')
+        .replace(/^关于/,'')
+        .trim();
+      const base = cleaned || firstSentence || text.trim();
+      const maxLen = 24; // 更紧凑
+      return base.length > maxLen ? base.slice(0, maxLen - 1) + '…' : base;
+    } catch {
+      return '新任务';
     }
   };
 

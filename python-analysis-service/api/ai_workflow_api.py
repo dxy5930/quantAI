@@ -507,10 +507,12 @@ async def stream_chat_message(
             generate_streaming_response(),
             media_type="text/event-stream",
             headers={
-                "Cache-Control": "no-cache",
+                "Cache-Control": "no-cache, no-transform",
                 "Connection": "keep-alive",
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Headers": "*",
+                # 重要：关闭Nginx等反向代理的缓冲，避免SSE被合并
+                "X-Accel-Buffering": "no",
             }
         )
         
@@ -1163,14 +1165,14 @@ async def generate_analysis_stream(message: str, context: Dict[str, Any], workfl
     try:
         # 构建分析提示词（由AI自定结构与段落数量，不强制5点）
         analysis_prompt = f"""
-你是专业的投资顾问。请根据用户问题做“自适应结构”的投资分析：
+你是专业的投资顾问。请根据用户问题做"自适应结构"的投资分析：
 
 用户问题：{message}
 
 要求：
 - 先判断问题复杂度，动态决定分析层级与段落数量（常见为2-6段）。
 - 按需覆盖：问题澄清/关键要点、必要的数据与事实依据、技术面与基本面中与问题高度相关的部分、主要风险、可执行建议。
-- 只输出结论与推理，不输出“执行步骤”或“我正在思考”等过程性话语。
+- 只输出结论与推理，不输出"执行步骤"或"我正在思考"等过程性话语。
 - 中文回答，结构清晰，列表和小标题自定，避免模板化重复。
 """
         
@@ -1222,23 +1224,9 @@ async def generate_analysis_stream(message: str, context: Dict[str, Any], workfl
                     yield f"data: {json.dumps({'type': 'content', 'content': '', 'stepId': 'ai_analysis'})}\n\n"
                     await asyncio.sleep(0.05)  # 空行间隔很短
         else:
-            # 降级回复
-            fallback_response = "【AI服务暂不可用，以下为简要建议】\n\n" + generate_fallback_analysis_response(message)
-            
-            # 【新增】保存降级回复到数据库
-            if workflow_id:
-                try:
-                    fallback_message_id = f"fallback_{uuid.uuid4()}"
-                    persistence_service.save_message(workflow_id, {
-                        "messageId": fallback_message_id,
-                        "type": "assistant",
-                        "content": fallback_response,
-                        "status": "fallback"
-                    })
-                except Exception as e:
-                    print(f"保存降级回复到数据库失败: {e}")
-            
-            yield f"data: {json.dumps({'type': 'content', 'content': fallback_response, 'stepId': 'fallback_analysis'})}\n\n"
+            # 取消降级长文案，发送精简错误提示事件
+            warn_msg = "AI服务暂不可用，请稍后重试。"
+            yield f"data: {json.dumps({'type': 'error', 'error': warn_msg})}\n\n"
 
     except Exception as e:
         print(f"生成分析回复失败: {e}")
@@ -1330,7 +1318,7 @@ async def generate_strategy_stream(message: str, context: Dict[str, Any], workfl
 
 用户需求：{message}
 
-请以“自适应结构”给出策略建议：根据复杂度动态决定段落与要点数量（2-6段皆可）。按需覆盖：策略目标与核心思路、关键操作建议、风险控制要点、预期区间/周期、执行注意事项。不要输出“执行步骤”或过程性叙述，仅给出结论与可执行建议。
+请以"自适应结构"给出策略建议：根据复杂度动态决定段落与要点数量（2-6段皆可）。按需覆盖：策略目标与核心思路、关键操作建议、风险控制要点、预期区间/周期、执行注意事项。不要输出"执行步骤"或过程性叙述，仅给出结论与可执行建议。
 """
         
         # 调用通义千问API - 添加超时保护
@@ -1361,10 +1349,9 @@ async def generate_strategy_stream(message: str, context: Dict[str, Any], workfl
                     yield f"data: {json.dumps({'type': 'content', 'content': '', 'stepId': 'ai_strategy'})}\n\n"
                     await asyncio.sleep(0.05)
         else:
-            # 降级回复
-            fallback_response = "【AI服务暂不可用，以下为降级策略框架】\n\n" + generate_fallback_strategy_response(message)
-            yield f"data: {json.dumps({'type': 'content', 'content': fallback_response, 'stepId': 'fallback_strategy'})}\n\n"
-
+            # 取消降级长文案，发送精简错误提示事件
+            warn_msg = "AI服务暂不可用，请稍后重试。"
+            yield f"data: {json.dumps({'type': 'error', 'error': warn_msg})}\n\n"
 
     except Exception as e:
         print(f"生成策略回复失败: {e}")
@@ -1459,7 +1446,7 @@ async def generate_general_stream(message: str, context: Dict[str, Any], workflo
                     None, 
                     lambda: qwen_analyzer.analyze_text(general_prompt, max_tokens=1500)
                 ),
-                timeout=30.0  # 30秒超时
+                timeout=300.0  # 300秒超时
             )
         except asyncio.TimeoutError:
             print("通义千问API超时，使用降级回复")
@@ -1480,9 +1467,9 @@ async def generate_general_stream(message: str, context: Dict[str, Any], workflo
                     yield f"data: {json.dumps({'type': 'content', 'content': '', 'stepId': 'ai_general'})}\n\n"
                     await asyncio.sleep(0.05)
         else:
-            # 降级回复 - 提供更有用的内容
-            fallback_response = generate_fallback_general_response(message)
-            yield f"data: {json.dumps({'type': 'content', 'content': fallback_response, 'stepId': 'fallback_general'})}\n\n"
+            # 取消降级长文案，发送精简错误提示事件
+            warn_msg = "AI服务暂不可用，请稍后重试。"
+            yield f"data: {json.dumps({'type': 'error', 'error': warn_msg})}\n\n"
                 
     except Exception as e:
         print(f"生成AI回复失败: {e}")

@@ -6,7 +6,7 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 
 // 从环境变量获取配置
-const PYTHON_API_BASE_URL = import.meta.env.VITE_PYTHON_API_BASE_URL || 'http://localhost:8000';
+const PYTHON_API_BASE_URL = import.meta.env.VITE_PYTHON_API_BASE_URL || '/python-api';
 const PYTHON_API_TIMEOUT = parseInt(import.meta.env.VITE_PYTHON_API_TIMEOUT || '60000');
 
 export class PythonApiClient {

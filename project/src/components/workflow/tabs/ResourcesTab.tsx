@@ -102,12 +102,44 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
 
   // 聚合资源：仅使用远程资源（去除本地上下文和临时资源，避免重复）
   useEffect(() => {
-    const allResources: WorkflowResource[] = [];
-    if (remoteResources.length > 0) allResources.push(...remoteResources);
-    // 不再合并workflowResources与taskContext，避免显示示例/重复数据
-    allResources.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-    setResources(allResources);
-  }, [remoteResources]);
+    // 合并远程与本地资源，远程优先（在前面）
+    const combined: WorkflowResource[] = [
+      ...(remoteResources || []),
+      ...(workflowResources || [])
+    ];
+
+    // 按资源“语义主键”去重，避免同一链接/接口重复
+    const makeKey = (r: WorkflowResource) => {
+      try {
+        const data: any = r.data || {};
+        switch (r.type) {
+          case 'web':
+            return `web:${data.url || data.link || data.queryUrl || r.title}`;
+          case 'api':
+            return `api:${data.endpoint || data.documentation || r.title}`;
+          case 'database':
+            return `db:${data.name || r.title}`;
+          case 'file':
+            return `file:${data.downloadUrl || data.file_path || r.title}`;
+          default:
+            return `${r.type}:${r.id || r.title}`;
+        }
+      } catch {
+        return r.id;
+      }
+    };
+
+    const map = new Map<string, WorkflowResource>();
+    for (const r of combined) {
+      const key = makeKey(r);
+      if (!map.has(key)) map.set(key, r);
+    }
+
+    const merged = Array.from(map.values()).sort(
+      (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+    );
+    setResources(merged);
+  }, [remoteResources, workflowResources]);
 
   // 过滤资源
   const filteredResources = filterType === 'all' 
@@ -156,22 +188,43 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
   };
 
   const handleResourceClick = (resource: WorkflowResource) => {
-    if (resource.type === 'web' && typeof resource.data?.url === 'string' && resource.data.url.startsWith('http')) {
-      const w = window.open(resource.data.url, '_blank', 'noopener,noreferrer');
-      if (w) w.opener = null;
-    } else if (resource.type === 'file' && resource.data.downloadUrl) {
-      const url = resource.data.downloadUrl || resource.data.file_path;
-      if (typeof url === 'string' && url) {
-        const w = window.open(url, '_blank', 'noopener,noreferrer');
+    const openIfHttp = (u?: string) => {
+      if (typeof u === 'string' && /^https?:\/\//.test(u)) {
+        const w = window.open(u, '_blank', 'noopener,noreferrer');
         if (w) w.opener = null;
+        return true;
       }
-    } else if (resource.type === 'api' && resource.data.documentation) {
-      const docUrl = resource.data.documentation;
-      if (typeof docUrl === 'string' && docUrl.startsWith('http')) {
-        const w = window.open(docUrl, '_blank', 'noopener,noreferrer');
-        if (w) w.opener = null;
-      }
+      return false;
+    };
+
+    // 优先使用标准化 urls 数组中的第一个
+    const urls: string[] = Array.isArray((resource as any).data?.urls)
+      ? (resource as any).data.urls
+      : Array.isArray((resource as any).urls)
+        ? (resource as any).urls
+        : [];
+    for (const u of urls) {
+      if (openIfHttp(u)) return;
     }
+
+    const maybeUrl = resource?.data?.url || resource?.data?.link || resource?.data?.queryUrl;
+
+    if (resource.type === 'web') {
+      if (openIfHttp(maybeUrl)) return;
+    }
+
+    if (resource.type === 'file' && (resource as any).data?.downloadUrl) {
+      const url = (resource as any).data?.downloadUrl || (resource as any).data?.file_path;
+      if (openIfHttp(url)) return;
+    }
+
+    if (resource.type === 'api') {
+      const docUrl = (resource as any).data?.documentation;
+      if (openIfHttp(docUrl)) return;
+    }
+
+    // 对于通用资源里携带的url，也尝试打开
+    if (openIfHttp(maybeUrl)) return;
   };
 
   const formatTime = (timestamp: Date) => {
