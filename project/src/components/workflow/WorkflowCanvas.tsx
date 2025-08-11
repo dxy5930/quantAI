@@ -658,7 +658,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
               console.log('工作流已创建并落库:', chunk);
               if ((window as any).updateSidebarTask && chunk.workflow_id) {
                 const title = generateCompactTitleFromFirstSentence(message);
-                (window as any).updateSidebarTask(chunk.workflow_id, title);
+                // 只在首次设置
+                ensureSidebarTitle(chunk.workflow_id, title);
               }
               break;
 
@@ -667,7 +668,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
               console.log('工作流标题和描述已更新:', chunk);
               if ((window as any).updateSidebarTask && chunk.workflow_id) {
                 const title = generateCompactTitleFromFirstSentence(message);
-                (window as any).updateSidebarTask(chunk.workflow_id, title);
+                // 只在首次设置
+                ensureSidebarTitle(chunk.workflow_id, title);
               }
               break;
 
@@ -695,9 +697,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
 
               // 基于用户原始问题，先生成一个更贴近的临时标题/简介，避免通用标题
               try {
-                if (workflowId && (window as any).updateSidebarTask && typeof message === 'string') {
+                if (workflowId && typeof message === 'string') {
                   const title = generateCompactTitleFromFirstSentence(message);
-                  (window as any).updateSidebarTask(workflowId, title);
+                  // 只在首次设置
+                  ensureSidebarTitle(workflowId, title);
                 }
               } catch (e) {
                 console.warn('预更新任务标题失败:', e);
@@ -730,9 +733,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
             case 'task_info':
               // 处理任务信息，更新左侧任务列表
               console.log('接收到任务信息:', chunk.taskTitle, chunk.taskDescription);
-              if (workflowId && (window as any).updateSidebarTask) {
+              if (workflowId) {
                 const title = generateCompactTitleFromFirstSentence(message);
-                (window as any).updateSidebarTask(workflowId, title);
+                // 只在首次设置
+                ensureSidebarTitle(workflowId, title);
                 console.log('已更新任务标题(基于首句):', title);
               }
               break;
@@ -939,10 +943,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                   .flat();
                 return prev.map(msg => {
                   if (msg.id !== aiMessageId) return msg;
-                  // 不改写“正在…”行，仅追加“报告已生成”
+                  // 规范化进度行：将所有“正在…”改为“已完成…”，并追加“报告已生成”
                   const data: any = { ...(msg.data || {}) };
-                  const lines: string[] = Array.isArray(data.progressLines) ? [...data.progressLines] : [];
-                  if (!lines.includes('报告已生成')) lines.push('报告已生成');
+                  const oldLines: string[] = Array.isArray(data.progressLines) ? [...data.progressLines] : [];
+                  const normalizedLines = oldLines.map(line => line.replace(/^正在/, '已完成'));
+                  if (!normalizedLines.includes('报告已生成')) normalizedLines.push('报告已生成');
                   return {
                     ...msg,
                     isComplete: true,
@@ -952,7 +957,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
                       ...(data || {}),
                       results: allStepResults,
                       isAssistantLoading: false,
-                      progressLines: lines
+                      progressLines: normalizedLines
                     }
                   } as TaskMessage;
                 });
@@ -975,17 +980,16 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
               //   }
               // ]);
               
-              // 任务完成后，生成更精准的工作流标题和描述
-              if (workflowId && (window as any).updateSidebarTask) {
+              // 任务完成后，生成更精准的工作流标题和描述（仅首次会生效）
+              if (workflowId) {
                 // 延迟执行，确保messages状态已更新
                 setTimeout(() => {
                   setMessages(currentMessages => {
                     const aiMsg = currentMessages.find(msg => msg.id === aiMessageId);
                     if (aiMsg && aiMsg.content) {
-                      // 最终标题：仅取用户首句的浓缩
                       const title = generateCompactTitleFromFirstSentence(message);
-                      console.log('任务完成，更新最终标题:', title);
-                      (window as any).updateSidebarTask(workflowId, title);
+                      console.log('任务完成，尝试更新最终标题(仅首次):', title);
+                      ensureSidebarTitle(workflowId, title);
                     }
                     return currentMessages;
                   });
@@ -1494,6 +1498,17 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
       </div>
     );
   }
+
+  // 确保只在本对话首次输入时设置侧栏标题（普通函数，避免额外的 Hook）
+  const ensureSidebarTitle = (wfId: string | null | undefined, title: string) => {
+    if (!wfId || !title) return;
+    const globalMap: Record<string, boolean> = (window as any).__workflowTitleLocked || ((window as any).__workflowTitleLocked = {});
+    if (globalMap[wfId]) return;
+    if ((window as any).updateSidebarTask) {
+      (window as any).updateSidebarTask(wfId, title);
+      globalMap[wfId] = true;
+    }
+  };
 
   return (
     <div className="h-full flex flex-col bg-white dark:bg-slate-900">

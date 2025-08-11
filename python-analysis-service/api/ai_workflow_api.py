@@ -515,7 +515,18 @@ async def stream_chat_message(
                 
             except Exception as e:
                 yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
-        
+            finally:
+                # 统一发送完成事件，并标记工作流完成
+                try:
+                    yield f"data: {json.dumps({'type': 'complete'})}\n\n"
+                except Exception:
+                    pass
+                if workflow_id:
+                    try:
+                        persistence_service.complete_workflow(workflow_id)
+                    except Exception as _:
+                        pass
+
         return StreamingResponse(
             generate_streaming_response(),
             media_type="text/event-stream",
