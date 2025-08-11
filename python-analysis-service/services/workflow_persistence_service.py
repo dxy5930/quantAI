@@ -92,7 +92,6 @@ class WorkflowPersistenceService:
         except Exception as e:
             logger.error(f"保存步骤失败: {e}")
             self.db.rollback()
-            return None
     
     def complete_step(self, workflow_id: str, step_id: str):
         """标记步骤为完成"""
@@ -117,19 +116,36 @@ class WorkflowPersistenceService:
     def save_message(self, workflow_id: str, message_data: dict):
         """保存工作流消息"""
         try:
-            message = WorkflowMessage(
-                id=str(uuid.uuid4()),
-                workflow_id=workflow_id,
-                message_id=message_data.get('messageId', str(uuid.uuid4())),
-                message_type=MessageType(message_data.get('type', 'system')),
-                content=message_data.get('content', ''),
-                status=message_data.get('status'),
-                data=message_data.get('data')
-            )
-            
-            self.db.add(message)
-            self.db.commit()
-            logger.info(f"保存消息: {message.message_id}")
+            incoming_message_id = message_data.get('messageId', str(uuid.uuid4()))
+
+            # 先查是否已存在相同 message_id（同一 workflow 内）
+            existing = self.db.query(WorkflowMessage).filter(
+                WorkflowMessage.workflow_id == workflow_id,
+                WorkflowMessage.message_id == incoming_message_id
+            ).first()
+
+            if existing:
+                # 幂等更新：覆盖可变字段
+                existing.message_type = MessageType(message_data.get('type', existing.message_type.value))
+                existing.content = message_data.get('content', existing.content)
+                existing.status = message_data.get('status', existing.status)
+                existing.data = message_data.get('data', existing.data)
+                existing.updated_at = datetime.utcnow()
+                self.db.commit()
+                logger.info(f"更新已存在消息: {existing.message_id}")
+            else:
+                message = WorkflowMessage(
+                    id=str(uuid.uuid4()),
+                    workflow_id=workflow_id,
+                    message_id=incoming_message_id,
+                    message_type=MessageType(message_data.get('type', 'system')),
+                    content=message_data.get('content', ''),
+                    status=message_data.get('status'),
+                    data=message_data.get('data')
+                )
+                self.db.add(message)
+                self.db.commit()
+                logger.info(f"保存消息: {message.message_id}")
         except Exception as e:
             logger.error(f"保存消息失败: {e}")
             self.db.rollback()

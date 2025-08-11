@@ -1106,7 +1106,7 @@ async def generate_analysis_stream(message: str, context: Dict[str, Any], workfl
                 })
                 
                 # 【新增】实时保存思考过程消息到数据库
-                step_message_id = f"step_msg_{i+1}_{uuid.uuid4()}"
+                step_message_id = f"{ai_message_id}_step_{i+1}_{uuid.uuid4()}"
                 persistence_service.save_message(workflow_id, {
                     "messageId": step_message_id,
                     "type": "task",
@@ -1147,7 +1147,7 @@ async def generate_analysis_stream(message: str, context: Dict[str, Any], workfl
                 persistence_service.complete_step(workflow_id, f'step_{i+1}')
                 
                 # 【新增】保存步骤完成状态到消息
-                completion_message_id = f"step_complete_{i+1}_{uuid.uuid4()}"
+                completion_message_id = f"{ai_message_id}_complete_{i+1}_{uuid.uuid4()}"
                 persistence_service.save_message(workflow_id, {
                     "messageId": completion_message_id,
                     "type": "result",
@@ -1204,7 +1204,7 @@ async def generate_analysis_stream(message: str, context: Dict[str, Any], workfl
                     # 【新增】实时保存AI分析内容到数据库
                     if workflow_id:
                         try:
-                            part_message_id = f"ai_content_{uuid.uuid4()}"
+                            part_message_id = f"{ai_message_id}_content_{uuid.uuid4()}"
                             persistence_service.save_message(workflow_id, {
                                 "messageId": part_message_id,
                                 "type": "assistant",
