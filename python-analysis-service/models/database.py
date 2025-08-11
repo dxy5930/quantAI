@@ -53,36 +53,35 @@ def test_database_connection():
         return False
 
 def create_tables_safely():
-    """安全地按依赖顺序创建表 - 只在表不存在时创建"""
+    """增量创建缺失的表（如果某些表已存在，仍会为缺失表执行创建）"""
     try:
-        # 检查是否已有表存在
         with engine.connect() as conn:
             existing_tables = conn.execute(text("SHOW TABLES")).fetchall()
-            table_names = [table[0] for table in existing_tables]
-            
-            # 检查核心表是否存在
-            core_tables = ['users', 'workflow_instances', 'workflow_steps', 'workflow_messages']
-            existing_core_tables = [t for t in core_tables if t in table_names]
-            
-            if existing_core_tables:
-                logger.info(f"数据库表已存在: {table_names}")
-                logger.info("跳过表创建，使用现有数据库结构")
-                return True
-        
-        # 如果没有核心表，则创建所有表
-        logger.info("未找到核心表，开始创建数据库表...")
-        
-        # 使用 SQLAlchemy 创建所有表
-        Base.metadata.create_all(bind=engine)
-        
-        # 验证表创建
+            existing_table_names = {row[0] for row in existing_tables}
+
+        # Base.metadata.tables 中包含了所有已声明模型的表
+        declared_table_names = list(Base.metadata.tables.keys())
+        missing_table_objects = [
+            Base.metadata.tables[name]
+            for name in declared_table_names
+            if name not in existing_table_names
+        ]
+
+        if not missing_table_objects:
+            logger.info("未发现缺失表，跳过创建")
+            return True
+
+        logger.info(f"发现缺失表: {[t.name for t in missing_table_objects]}，开始创建...")
+        # 仅创建缺失的表
+        Base.metadata.create_all(bind=engine, tables=missing_table_objects)
+
+        # 校验
         with engine.connect() as conn:
             tables = conn.execute(text("SHOW TABLES")).fetchall()
             table_names = [table[0] for table in tables]
-            logger.info(f"已创建的表: {table_names}")
-            
+            logger.info(f"当前数据库表: {table_names}")
         return True
-        
+
     except Exception as e:
         logger.error(f"创建表失败: {str(e)}")
         return False
@@ -97,7 +96,7 @@ def init_database():
         
         logger.info("开始数据库初始化...")
         
-        # 安全地创建表
+        # 增量创建缺失表
         if create_tables_safely():
             logger.info("数据库初始化成功")
         else:

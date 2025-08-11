@@ -31,9 +31,11 @@ from api.home_api import router as home_router
 from api.auth_api import router as auth_router
 from api.user_api import router as user_router
 from api.notification_api import router as notification_router
+from api.review_api import router as review_router
 from models.database import init_database
 from models.workflow_models import WorkflowInstance, WorkflowStep, WorkflowResource, WorkflowMessage  # 导入模型以确保表创建
 from models.user_models import User, Notification, UserSession  # 导入用户相关模型
+from models.review_models import Review  # 导入复盘模型以确保表创建
 
 # 配置日志 - 禁用watchfiles的频繁输出
 log_config = config.get_log_config()
@@ -77,6 +79,7 @@ async def add_process_time_header(request, call_next):
 app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(notification_router)
+app.include_router(review_router)
 app.include_router(smart_stock_router)
 app.include_router(stock_recommendation_router)
 app.include_router(stock_array_analysis_router)

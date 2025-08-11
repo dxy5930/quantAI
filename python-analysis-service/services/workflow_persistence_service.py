@@ -254,7 +254,68 @@ class WorkflowPersistenceService:
             print(f"❌ 保存资源失败: {e}")
             logger.error(f"保存资源失败: {e}")
             self.db.rollback()
-    
+
+    def save_markdown_resource(self, workflow_id: str, title: str, markdown_content: str, step_id: str | None = None, category: str | None = 'result'):
+        """保存Markdown资源到工作流资源列表"""
+        try:
+            step_pk = None
+            if step_id:
+                step_row = self.db.query(WorkflowStep).filter(
+                    WorkflowStep.workflow_id == workflow_id,
+                    WorkflowStep.step_id == step_id
+                ).first()
+                step_pk = step_row.id if step_row else None
+            resource = WorkflowResource(
+                id=str(uuid.uuid4()),
+                workflow_id=workflow_id,
+                step_id=step_pk,
+                resource_type=WorkflowResourceType.GENERAL,
+                title=title,
+                description='Markdown文档',
+                data={
+                    'format': 'markdown',
+                    'content': markdown_content
+                },
+                category=category,
+                source_step_id=step_id
+            )
+            self.db.add(resource)
+            self.db.commit()
+            logger.info(f"保存Markdown资源: {title}")
+            return resource
+        except Exception as e:
+            logger.error(f"保存Markdown资源失败: {e}")
+            self.db.rollback()
+
+    def save_chart_resource(self, workflow_id: str, title: str, chart_data: dict, step_id: str | None = None, category: str | None = 'result'):
+        """保存图表资源到工作流资源列表"""
+        try:
+            step_pk = None
+            if step_id:
+                step_row = self.db.query(WorkflowStep).filter(
+                    WorkflowStep.workflow_id == workflow_id,
+                    WorkflowStep.step_id == step_id
+                ).first()
+                step_pk = step_row.id if step_row else None
+            resource = WorkflowResource(
+                id=str(uuid.uuid4()),
+                workflow_id=workflow_id,
+                step_id=step_pk,
+                resource_type=WorkflowResourceType.CHART,
+                title=title,
+                description='自动生成的图表',
+                data=chart_data,
+                category=category,
+                source_step_id=step_id
+            )
+            self.db.add(resource)
+            self.db.commit()
+            logger.info(f"保存图表资源: {title}")
+            return resource
+        except Exception as e:
+            logger.error(f"保存图表资源失败: {e}")
+            self.db.rollback()
+
     def update_workflow_progress(self, workflow_id: str):
         """更新工作流进度"""
         try:

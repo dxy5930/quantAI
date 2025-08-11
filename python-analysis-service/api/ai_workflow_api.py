@@ -499,6 +499,19 @@ async def stream_chat_message(
                         "content": "分析完成",
                         "status": "completed"
                     })
+
+                    # 【新增】对话完成后动态生成资源（MD/图表）
+                    try:
+                        from services.dynamic_resource_service import DynamicResourceService
+                        context_dict = context_dict if isinstance(context_dict, dict) else {}
+                        DynamicResourceService().generate_and_save(
+                            workflow_id=workflow_id,
+                            message=message,
+                            context=context_dict,
+                            persistence_service=persistence_service,
+                        )
+                    except Exception as e:
+                        logger.error(f"自动生成资源失败: {e}")
                 
             except Exception as e:
                 yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"

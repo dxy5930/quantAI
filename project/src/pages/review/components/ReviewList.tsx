@@ -7,6 +7,7 @@ interface Review {
   date: string;
   status: 'draft' | 'completed';
   summary?: string;
+  content?: string;
 }
 
 interface ReviewListProps {

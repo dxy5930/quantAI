@@ -7,6 +7,7 @@ interface Review {
   date: string;
   status: 'draft' | 'completed';
   summary?: string;
+  content?: string;
 }
 
 interface ReviewEditorProps {
@@ -27,49 +28,7 @@ export const ReviewEditor: React.FC<ReviewEditorProps> = ({
     if (review) {
       setTitle(review.title);
       setSummary(review.summary || '');
-      setContent(`# ${review.title}
-
-## 市场概况
-今日市场表现...
-
-## 持仓分析
-### 盈利股票
-- 股票A: +2.5%
-- 股票B: +1.8%
-
-### 亏损股票
-- 股票C: -1.2%
-- 股票D: -0.8%
-
-## 交易决策回顾
-### 买入决策
-1. **股票A** - 技术面突破，基本面良好
-2. **股票B** - 板块轮动机会
-
-### 卖出决策
-1. **股票C** - 止损出局
-2. **股票D** - 获利了结
-
-## 经验总结
-### 做得好的地方
-- 及时止损，控制风险
-- 抓住了板块轮动机会
-
-### 需要改进的地方
-- 仓位管理需要更加精细
-- 对市场情绪的判断还需提高
-
-## 明日策略
-- 关注大盘走势
-- 重点关注科技板块
-- 控制仓位在70%以内
-
-## 风险提示
-- 市场波动较大，注意风险控制
-- 关注政策面变化
-
----
-*复盘完成时间: ${new Date().toLocaleString()}*`);
+      setContent(review.content || `# ${review.title}`);
       setIsEditing(false);
     } else {
       setTitle('');
@@ -84,10 +43,12 @@ export const ReviewEditor: React.FC<ReviewEditorProps> = ({
     onUpdateReview(review.id, {
       title,
       summary,
-      status: 'completed'
+      status: 'completed',
+      content,
     });
     setIsEditing(false);
   };
+
 
   const handleEdit = () => {
     setIsEditing(true);
