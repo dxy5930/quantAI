@@ -34,7 +34,7 @@ class DatabaseService:
         """
         try:
             # 构建基础查询
-            query = self.db.query(Stock).filter(Stock.is_active == True)
+            query = self.db.query(Stock).filter(Stock.isActive == True)
             
             # 行业筛选
             sectors = conditions.get('sectors', [])
@@ -48,13 +48,16 @@ class DatabaseService:
             # 市值筛选
             market_cap = conditions.get('market_cap', 'any')
             if market_cap != 'any':
-                market_cap_map = {
-                    'large': '大盘股',
-                    'mid': '中盘股', 
-                    'small': '小盘股'
-                }
-                if market_cap in market_cap_map:
-                    query = query.filter(Stock.market_cap == market_cap_map[market_cap])
+                # 根据市值范围筛选（单位：亿元）
+                if market_cap == 'large':
+                    # 大盘股：市值 > 1000亿
+                    query = query.filter(Stock.marketCap > 100000000000)
+                elif market_cap == 'mid':
+                    # 中盘股：100亿 < 市值 <= 1000亿
+                    query = query.filter(and_(Stock.marketCap > 10000000000, Stock.marketCap <= 100000000000))
+                elif market_cap == 'small':
+                    # 小盘股：市值 <= 100亿
+                    query = query.filter(Stock.marketCap <= 10000000000)
             
             # 获取基础股票列表
             stocks = query.limit(1000).all()  # 限制查询数量
@@ -102,8 +105,7 @@ class DatabaseService:
                         'sector': stock.sector,
                         'industry': stock.industry,
                         'market': stock.market,
-                        'market_cap': stock.market_cap,
-                        'description': stock.description,
+                        'market_cap': stock.marketCap,
                         'financial_data': financial_data,
                         'technical_data': technical_data,
                         'price_data': price_data,
@@ -286,8 +288,7 @@ class DatabaseService:
                 stock_filters.extend([
                     Stock.name.collate('utf8mb4_unicode_ci').like(f'%{keyword}%'),
                     Stock.sector.collate('utf8mb4_unicode_ci').like(f'%{keyword}%'),
-                    Stock.industry.collate('utf8mb4_unicode_ci').like(f'%{keyword}%'),
-                    Stock.description.collate('utf8mb4_unicode_ci').like(f'%{keyword}%')
+                    Stock.industry.collate('utf8mb4_unicode_ci').like(f'%{keyword}%')
                 ])
             
             stock_query = (
