@@ -274,22 +274,75 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
 
     const maybeUrl = resource?.data?.url || resource?.data?.link || resource?.data?.queryUrl;
 
+    // 网页类型资源
     if (resource.type === 'web') {
       if (openIfHttp(maybeUrl)) return;
     }
 
-    if (resource.type === 'file' && (resource as any).data?.downloadUrl) {
-      const url = (resource as any).data?.downloadUrl || (resource as any).data?.file_path;
-      if (openIfHttp(url)) return;
+    // 文件类型资源
+    if (resource.type === 'file') {
+      const downloadUrl = (resource as any).data?.downloadUrl || (resource as any).data?.file_path;
+      if (downloadUrl) {
+        // 如果是blob URL或http URL，直接打开
+        if (downloadUrl.startsWith('blob:') || openIfHttp(downloadUrl)) {
+          const w = window.open(downloadUrl, '_blank');
+          if (w) w.opener = null;
+          return;
+        }
+      }
     }
 
+    // API类型资源
     if (resource.type === 'api') {
       const docUrl = (resource as any).data?.documentation;
       if (openIfHttp(docUrl)) return;
+      
+      // 如果没有文档链接，展示详细信息
+      setExpandedId(expandedId === resource.id ? null : resource.id);
+      return;
     }
 
-    // 对于通用资源里携带的url，也尝试打开
-    if (openIfHttp(maybeUrl)) return;
+    // 图表类型资源
+    if (resource.type === 'chart') {
+      const imageUrl = resource.data?.imageUrl || resource.data?.dataUrl;
+      if (imageUrl) {
+        const w = window.open(imageUrl, '_blank');
+        if (w) w.opener = null;
+        return;
+      }
+    }
+
+    // 数据库类型资源
+    if (resource.type === 'database') {
+      // 展示数据库详细信息
+      setExpandedId(expandedId === resource.id ? null : resource.id);
+      return;
+    }
+
+    // 通用类型资源
+    if (resource.type === 'general') {
+      // 尝试打开URL
+      if (openIfHttp(maybeUrl)) return;
+      
+      // 如果有文件下载链接
+      const downloadUrl = resource.data?.downloadUrl || resource.data?.fileUrl;
+      if (downloadUrl) {
+        if (downloadUrl.startsWith('blob:') || openIfHttp(downloadUrl)) {
+          const w = window.open(downloadUrl, '_blank');
+          if (w) w.opener = null;
+          return;
+        }
+      }
+      
+      // 如果有内容，展示详细信息
+      if (resource.data?.content || resource.description) {
+        setExpandedId(expandedId === resource.id ? null : resource.id);
+        return;
+      }
+    }
+
+    // 默认行为：切换详细信息显示
+    setExpandedId(expandedId === resource.id ? null : resource.id);
   };
 
   const formatTime = (timestamp: Date) => {
@@ -443,15 +496,15 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
 
                 {/* 操作按钮 */}
                 <div className="flex items-center space-x-1 ml-2">
-                  {(resource.type === 'api' || resource.type === 'database') && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === resource.id ? null : resource.id); }}
-                      className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
-                      title={expandedId === resource.id ? '收起详情' : '查看详情'}
-                    >
-                      <Code className="w-3 h-3 text-gray-400" />
-                    </button>
-                  )}
+                  {/* 通用详情按钮 */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === resource.id ? null : resource.id); }}
+                    className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
+                    title={expandedId === resource.id ? '收起详情' : '查看详情'}
+                  >
+                    <Code className="w-3 h-3 text-gray-400" />
+                  </button>
+                  
                   {resource.type === 'web' && (
                     <button
                       onClick={(e) => {
@@ -498,6 +551,23 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
                       }}
                       className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
                       title="下载图表"
+                    >
+                      <Download className="w-3 h-3 text-gray-400" />
+                    </button>
+                  )}
+                  
+                  {resource.type === 'general' && resource.data?.downloadUrl && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const url = resource.data.downloadUrl;
+                        if (url) {
+                          const w = window.open(url, '_blank');
+                          if (w) w.opener = null;
+                        }
+                      }}
+                      className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
+                      title="下载文件"
                     >
                       <Download className="w-3 h-3 text-gray-400" />
                     </button>
@@ -583,6 +653,42 @@ export const ResourcesTab: React.FC<ResourcesTabProps> = observer(({
                             title="复制连接串"
                           >
                             <span className="inline-flex items-center gap-1"><Copy className="w-3 h-3"/>复制连接</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {resource.type === 'general' && (
+                    <div className="space-y-2">
+                      {resource.data?.content && (
+                        <div>
+                          <div className="text-gray-500 mb-1">内容预览</div>
+                          <div className="text-xs bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded p-2 max-h-40 overflow-y-auto">
+                            <pre className="whitespace-pre-wrap break-words">{String(resource.data.content).slice(0, 500)}{String(resource.data.content).length > 500 ? '...' : ''}</pre>
+                          </div>
+                        </div>
+                      )}
+                      {resource.data?.format && (
+                        <div className="text-gray-500">格式：{String(resource.data.format)}</div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        {resource.data?.downloadUrl && (
+                          <button
+                            className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+                            onClick={(e) => { e.stopPropagation(); const w = window.open(resource.data.downloadUrl, '_blank'); if (w) w.opener = null; }}
+                            title="下载文件"
+                          >
+                            <span className="inline-flex items-center gap-1"><Download className="w-3 h-3"/>下载</span>
+                          </button>
+                        )}
+                        {resource.data?.content && (
+                          <button
+                            className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+                            onClick={(e) => { e.stopPropagation(); copyText(String(resource.data.content)); }}
+                            title="复制内容"
+                          >
+                            <span className="inline-flex items-center gap-1"><Copy className="w-3 h-3"/>复制内容</span>
                           </button>
                         )}
                       </div>

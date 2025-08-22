@@ -1,117 +1,157 @@
-# Hooks 使用说明
+# useStreamingChat Hook 使用说明
 
-## useLoadMore Hook
+## 概述
 
-用于处理滑动加载更多功能的通用 hook。
+`useStreamingChat` 是一个自定义 React Hook，用于管理 SSE（Server-Sent Events）流式对话功能。它将复杂的流式对话逻辑从组件中抽离出来，提供了清晰的接口和状态管理。
 
-### 功能特性
+## 主要功能
 
-- 自动检测滚动到底部
-- 防抖处理，避免频繁触发
-- 支持自定义容器和阈值
-- 提供加载状态管理
-- 支持手动触发加载
+- 🔄 管理 SSE 连接的生命周期
+- 📝 处理流式消息和步骤更新
+- 🔗 自动处理连接管理和清理
+- 💡 生成智能建议选项
+- 🛡️ 错误处理和连接状态管理
 
-### 使用方法
+## 接口定义
 
 ```typescript
-import { useLoadMore } from '../hooks/useLoadMore';
+interface UseStreamingChatOptions {
+  workflowId: string | null;
+  onMessagesUpdate: (updater: (prev: TaskMessage[]) => TaskMessage[]) => void;
+  onStepsUpdate: (updater: (prev: ExecutionStep[]) => ExecutionStep[]) => void;
+  onSuggestionsUpdate: (suggestions: any[]) => void;
+}
+
+interface StreamingChatState {
+  isStreaming: boolean;
+  isRunning: boolean;
+  currentTaskId: string | null;
+}
+```
+
+## 使用示例
+
+```typescript
+import { useStreamingChat } from '../hooks/useStreamingChat';
 
 const MyComponent = () => {
-  const { isLoading, isEnd, loadMore, reset } = useLoadMore(
-    async () => {
-      // 返回是否还有更多数据
-      const hasMore = await fetchMoreData();
-      return hasMore;
-    },
-    {
-      threshold: 200,        // 距离底部多少像素时触发
-      enabled: true,         // 是否启用
-      debounceDelay: 300,    // 防抖延迟
-      container: '#my-container' // 监听的容器
-    }
-  );
+  const [messages, setMessages] = useState<TaskMessage[]>([]);
+  const [steps, setSteps] = useState<ExecutionStep[]>([]);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  
+  // 使用流式聊天Hook
+  const streamingChat = useStreamingChat({
+    workflowId: 'your-workflow-id',
+    onMessagesUpdate: setMessages,
+    onStepsUpdate: setSteps,
+    onSuggestionsUpdate: setSuggestions
+  });
+
+  const handleSendMessage = (message: string) => {
+    // 添加用户消息
+    const userMessage = {
+      id: Date.now().toString(),
+      type: 'user' as const,
+      content: message,
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, userMessage]);
+    
+    // 开始流式对话
+    streamingChat.startStreamingChat(message);
+  };
+
+  const handleStop = () => {
+    streamingChat.forceStopAllConnections();
+  };
+
+  // 组件卸载时清理
+  useEffect(() => {
+    return () => {
+      streamingChat.cleanup();
+    };
+  }, [streamingChat.cleanup]);
 
   return (
     <div>
-      {/* 你的内容 */}
-      {isLoading && <div>加载中...</div>}
-      {isEnd && <div>已加载完毕</div>}
+      {/* 消息列表 */}
+      {messages.map(msg => (
+        <div key={msg.id}>{msg.content}</div>
+      ))}
+      
+      {/* 输入框和控制按钮 */}
+      <input 
+        disabled={streamingChat.state.isStreaming}
+        onKeyPress={(e) => {
+          if (e.key === 'Enter') {
+            handleSendMessage(e.currentTarget.value);
+          }
+        }}
+      />
+      
+      {streamingChat.state.isStreaming ? (
+        <button onClick={handleStop}>停止</button>
+      ) : (
+        <button onClick={() => handleSendMessage('Hello')}>发送</button>
+      )}
     </div>
   );
 };
 ```
 
-### 参数说明
-
-#### onLoadMore
-- 类型: `() => Promise<boolean> | boolean`
-- 说明: 加载更多数据的回调函数，返回是否还有更多数据
-
-#### options
-- `threshold`: 触发加载的距离底部阈值，默认 200px
-- `enabled`: 是否启用加载更多，默认 true
-- `debounceDelay`: 防抖延迟时间，默认 300ms
-- `container`: 监听的容器，可以是选择器字符串或 HTMLElement，默认监听 window
-
-### 返回值
-
-- `isLoading`: 是否正在加载
-- `isEnd`: 是否已加载完毕
-- `loadMore`: 手动触发加载更多
-- `reset`: 重置状态
-- `setLoading`: 设置加载状态
-- `setEnd`: 设置结束状态
-
-### 在策略列表中的使用示例
+## Hook 返回值
 
 ```typescript
-// 在 StrategyListPage 中的使用
-const { isLoading: isLoadingMore, isEnd } = useLoadMore(
-  async () => {
-    return await strategy.loadMoreStrategies();
-  },
-  {
-    threshold: 200,
-    enabled: true,
-    debounceDelay: 300,
-  }
-);
+const {
+  state,                    // 当前状态 { isStreaming, isRunning, currentTaskId }
+  startStreamingChat,       // 开始流式对话的函数
+  forceStopAllConnections,  // 强制停止所有连接的函数
+  cleanup                   // 清理函数
+} = useStreamingChat(options);
 ```
 
-## useStore Hook
+## 主要特性
 
-用于获取全局状态管理器的 hook。
+### 1. 自动状态管理
+Hook 自动管理连接状态、流式状态和任务ID，无需手动管理这些复杂的状态。
 
-### 使用方法
+### 2. 连接生命周期管理
+- 自动处理连接的创建和关闭
+- 防止内存泄漏和重复连接
+- 组件卸载时自动清理资源
 
-```typescript
-import { useStore } from '../hooks/useStore';
+### 3. 流式消息处理
+- 支持多种消息类型（start、progress、content、complete、error等）
+- 自动更新消息和步骤状态
+- 智能处理进度行和步骤完成状态
 
-const MyComponent = () => {
-  const { strategy, user, app } = useStore();
-  
-  // 使用 store
-  return <div>{strategy.filteredStrategies.length} 个策略</div>;
-};
-```
+### 4. 智能建议生成
+- AI 回答完成后自动生成相关建议
+- 支持后端 API 调用
+- 错误时优雅降级
 
-## useTheme Hook
+### 5. 错误处理
+- 连接错误自动重试和清理
+- 组件卸载检查防止状态泄漏
+- 连接状态验证
 
-用于主题管理的 hook。
+## 注意事项
 
-### 使用方法
+1. **组件卸载**：确保在组件卸载时调用 `cleanup()` 函数
+2. **工作流ID**：workflowId 变化时会自动处理连接切换
+3. **状态同步**：通过回调函数保持状态同步，避免直接修改Hook内部状态
+4. **并发控制**：Hook内部处理并发连接问题，确保只有一个活跃连接
 
-```typescript
-import { useTheme } from '../hooks/useTheme';
+## 重构前后对比
 
-const MyComponent = () => {
-  const { theme, setTheme } = useTheme();
-  
-  return (
-    <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
-      切换主题
-    </button>
-  );
-};
-``` 
+### 重构前（WorkflowCanvas.tsx）
+- 1676 行代码，包含大量 SSE 处理逻辑
+- 复杂的状态管理和事件处理
+- 难以测试和维护
+
+### 重构后
+- WorkflowCanvas.tsx：减少至约 800 行
+- useStreamingChat.ts：539 行专门的Hook逻辑
+- 清晰的职责分离和更好的可维护性
+
+这种重构提高了代码的可读性、可测试性和可维护性，同时保持了所有原有功能。

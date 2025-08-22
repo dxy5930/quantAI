@@ -503,11 +503,12 @@ async def stream_chat_message(
                     # 【新增】对话完成后动态生成资源（MD/图表）
                     try:
                         from services.dynamic_resource_service import DynamicResourceService
-                        context_dict = context_dict if isinstance(context_dict, dict) else {}
+                        # 确保 context_dict 在这里可用
+                        context_data = context_dict if 'context_dict' in locals() and isinstance(context_dict, dict) else {}
                         DynamicResourceService().generate_and_save(
                             workflow_id=workflow_id,
                             message=message,
-                            context=context_dict,
+                            context=context_data,
                             persistence_service=persistence_service,
                         )
                     except Exception as e:
@@ -3215,3 +3216,116 @@ def generate_fallback_strategy_response(message: str) -> str:
 - 定期总结和优化
 
 📈 **建议**: 任何投资策略都需要根据市场变化和个人情况及时调整。"""
+
+# 新增：建议选项生成API
+
+class SuggestionRequest(BaseModel):
+    """建议选项生成请求模型"""
+    ai_content: str
+    user_message: Optional[str] = ""
+    context: Optional[Dict[str, Any]] = None
+
+@router.get("/chat/default-suggestions")
+async def get_default_chat_suggestions():
+    """
+    获取默认的金融问题庻议（用于新对话引导）
+    使用通义千问AI生成当前热门的金融问题
+    """
+    try:
+        logger.info("获取默认金融问题庺议")
+        
+        # 使用QwenAnalyzer生成默认问题
+        default_questions = qwen_analyzer.generate_default_financial_questions()
+        
+        logger.info(f"生成默认问题成功: {len(default_questions)}个问题")
+        
+        return {
+            "success": True,
+            "data": {
+                "suggestions": default_questions,
+                "total": len(default_questions),
+                "generated_by": "ai_default",
+                "timestamp": datetime.now().isoformat()
+            },
+            "message": f"已生成{len(default_questions)}个默认金融问题"
+        }
+        
+    except Exception as e:
+        logger.error(f"获取默认问题失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取默认问题失败: {str(e)}")
+
+@router.post("/chat/generate-suggestions")
+async def generate_chat_suggestions(request: SuggestionRequest):
+    """
+    基于AI回答内容和用户问题生成智能建议选项
+    使用通义千问AI生成更精准的后续问题建议
+    """
+    try:
+        logger.info(f"开始生成建议选项 - user_message: {request.user_message[:50]}..., ai_content长度: {len(request.ai_content)}")
+        
+        # 使用QwenAnalyzer生成智能建议
+        suggestions = qwen_analyzer.generate_suggestions(
+            ai_content=request.ai_content,
+            user_message=request.user_message,
+            context=request.context or {}
+        )
+        
+        logger.info(f"AI生成建议选项成功: {len(suggestions)}个建议")
+        
+        return {
+            "success": True,
+            "data": {
+                "suggestions": suggestions,
+                "total": len(suggestions),
+                "generated_by": "qwen_ai",
+                "timestamp": datetime.now().isoformat()
+            },
+            "message": f"已生成{len(suggestions)}个智能建议选项"
+        }
+        
+    except Exception as e:
+        logger.error(f"生成建议选项失败: {e}")
+        
+        # 返回错误时，提供默认建议选项
+        fallback_suggestions = [
+            {
+                "id": f"fallback-{int(datetime.now().timestamp() * 1000)}-0",
+                "text": "详细分析",
+                "content": "请提供更详细的分析和数据支持",
+                "category": "analysis",
+                "description": "深入分析相关内容"
+            },
+            {
+                "id": f"fallback-{int(datetime.now().timestamp() * 1000)}-1",
+                "text": "风险提示",
+                "content": "请分析相关的风险因素和注意事项",
+                "category": "analysis",
+                "description": "了解潜在风险"
+            },
+            {
+                "id": f"fallback-{int(datetime.now().timestamp() * 1000)}-2",
+                "text": "实操建议",
+                "content": "请提供具体的操作建议和注意事项",
+                "category": "action", 
+                "description": "获取可操作的建议"
+            },
+            {
+                "id": f"fallback-{int(datetime.now().timestamp() * 1000)}-3",
+                "text": "相关问题",
+                "content": "还有哪些相关问题值得关注？",
+                "category": "question",
+                "description": "探索更多相关主题"
+            }
+        ]
+        
+        return {
+            "success": False,
+            "data": {
+                "suggestions": fallback_suggestions,
+                "total": len(fallback_suggestions),
+                "generated_by": "fallback",
+                "timestamp": datetime.now().isoformat()
+            },
+            "message": f"AI生成失败，提供默认建议: {str(e)}",
+            "error": str(e)
+        }

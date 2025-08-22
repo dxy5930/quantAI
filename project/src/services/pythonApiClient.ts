@@ -192,6 +192,31 @@ export class PythonApiClient {
   }
 
   /**
+   * 获取默认的金融问题建议（用于新对话引导）
+   */
+  async getDefaultSuggestions() {
+    const response = await this.axiosInstance.get('/api/v1/chat/default-suggestions');
+    return response.data;
+  }
+
+  /**
+   * 生成智能建议选项
+   */
+  async generateSuggestions(params: {
+    aiContent: string;
+    userMessage?: string;
+    context?: Record<string, any>;
+  }) {
+    const response = await this.axiosInstance.post('/api/v1/chat/generate-suggestions', {
+      ai_content: params.aiContent,
+      user_message: params.userMessage || '',
+      context: params.context || {}
+    });
+
+    return response.data;
+  }
+
+  /**
    * 健康检查
    */
   async healthCheck() {
