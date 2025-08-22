@@ -1,22 +1,11 @@
+/**
+ * 复盘列表组件 - 模块化版本
+ * Review List Component - Modular Version
+ */
+
 import React from 'react';
 import { Plus, FileText, Calendar, Clock, Trash2 } from 'lucide-react';
-
-interface Review {
-  id: string;
-  title: string;
-  date: string;
-  status: 'draft' | 'completed';
-  summary?: string;
-  content?: string;
-}
-
-interface ReviewListProps {
-  reviews: Review[];
-  selectedReview: Review | null;
-  onSelectReview: (review: Review) => void;
-  onCreateReview: () => void;
-  onDeleteReview: (reviewId: string) => void;
-}
+import { ReviewListProps } from '../types';
 
 export const ReviewList: React.FC<ReviewListProps> = ({
   reviews,
@@ -25,7 +14,7 @@ export const ReviewList: React.FC<ReviewListProps> = ({
   onCreateReview,
   onDeleteReview
 }) => {
-  const getStatusColor = (status: Review['status']) => {
+  const getStatusColor = (status: 'draft' | 'completed') => {
     switch (status) {
       case 'completed':
         return 'text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-900/30';
@@ -36,7 +25,7 @@ export const ReviewList: React.FC<ReviewListProps> = ({
     }
   };
 
-  const getStatusText = (status: Review['status']) => {
+  const getStatusText = (status: 'draft' | 'completed') => {
     switch (status) {
       case 'completed':
         return '已完成';
@@ -140,4 +129,4 @@ export const ReviewList: React.FC<ReviewListProps> = ({
   );
 };
 
-export default ReviewList; 
+export default ReviewList;
