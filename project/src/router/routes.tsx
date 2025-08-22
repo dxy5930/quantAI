@@ -8,6 +8,7 @@ import { WorkflowPageLayout } from './layouts/WorkflowLayout';
 import { RouteGuard } from './RouteGuard';
 
 // 懒加载页面组件
+const HomePage = lazy(() => import('../pages/home'));
 const LoginPage = lazy(() => import('../pages/auth/Login'));
 const RegisterPage = lazy(() => import('../pages/auth/Register'));
 const ForgotPasswordPage = lazy(() => import('../pages/auth/ForgotPassword'));
@@ -78,7 +79,7 @@ export const routes: RouteObject[] = [
       // 首页
       {
         index: true,
-        element: <div>首页</div> // 临时占位符
+        element: <HomePage />
       },
       
       // 用户相关页面

@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 import jwt
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 
 from models.database import get_db
 from models.user_models import User, Notification
@@ -45,9 +46,9 @@ def get_current_user_from_token(request: Request, db: Session) -> User:
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(status_code=401, detail="无效的令牌")
-    except jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="令牌已过期")
-    except jwt.JWTError:
+    except InvalidTokenError:
         raise HTTPException(status_code=401, detail="无效的令牌")
     
     user = db.query(User).filter(User.id == user_id).first()

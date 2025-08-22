@@ -262,6 +262,40 @@ export class PythonApiClient {
 
     return response.data;
   }
+
+  /**
+   * 获取用户统计数据（需要登录）
+   */
+  async getUserStats() {
+    const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    const response = await this.axiosInstance.get('/api/v1/home/user-stats', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return response.data;
+  }
+
+  /**
+   * 获取用户最近活动（需要登录）
+   */
+  async getRecentActivities() {
+    const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    const response = await this.axiosInstance.get('/api/v1/home/recent-activities', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    return response.data;
+  }
+
+  /**
+   * 获取市场数据（公开数据，不需要登录）
+   */
+  async getMarketData() {
+    const response = await this.axiosInstance.get('/api/v1/home/market-data');
+    return response.data;
+  }
 }
 
 // 创建默认实例

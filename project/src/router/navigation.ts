@@ -39,6 +39,31 @@ export class NavigationHelper {
     this.navigate(ROUTES.ABOUT);
   };
 
+  // 导航到AI工作流页面
+  toAIWorkflow = () => {
+    this.navigate(ROUTES.AI_WORKFLOW);
+  };
+
+  // 导航到复盘页面
+  toReview = () => {
+    this.navigate(ROUTES.REVIEW);
+  };
+
+  // 导航到价格方案页面
+  toPricing = () => {
+    this.navigate(ROUTES.PRICING);
+  };
+
+  // 导航到反馈页面
+  toFeedback = () => {
+    this.navigate(ROUTES.FEEDBACK);
+  };
+
+  // 导航到通知中心
+  toNotifications = () => {
+    this.navigate(ROUTES.NOTIFICATIONS);
+  };
+
   // 导航到错误页面
   toNotFound = () => {
     this.navigate(ROUTES.NOT_FOUND);

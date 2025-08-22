@@ -5,6 +5,7 @@ from typing import Optional
 from datetime import datetime, timedelta
 import bcrypt
 import jwt
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 import uuid
 import secrets
 
@@ -303,9 +304,9 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
             user_id = payload.get("sub")
             if not user_id:
                 raise HTTPException(status_code=401, detail="无效的令牌")
-        except jwt.ExpiredSignatureError:
+        except ExpiredSignatureError:
             raise HTTPException(status_code=401, detail="令牌已过期")
-        except jwt.JWTError:
+        except InvalidTokenError:
             raise HTTPException(status_code=401, detail="无效的令牌")
         
         # 获取用户信息
