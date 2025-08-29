@@ -33,6 +33,7 @@ const DEFAULT_FIELDS: BuilderFieldConfig[] = [
 
 // 预设指标（只读，通过 AI 填充）
 const PRESET_INDICATORS: Array<{ id: string; name: string; type: FieldType; width?: number }> = [
+  { id: 'preset_symbol', name: '股票代码', type: FieldType.TEXT, width: 120 },
   { id: 'preset_open', name: '今开', type: FieldType.NUMBER, width: 100 },
   { id: 'preset_high', name: '最高', type: FieldType.NUMBER, width: 100 },
   { id: 'preset_low', name: '最低', type: FieldType.NUMBER, width: 100 },

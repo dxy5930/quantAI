@@ -108,6 +108,28 @@ function mapFieldToColumn(field: Field) {
     width: field.width || 160,
   };
 
+  // 预设字段保持只读，不提供 editor
+  if (field.isPreset) {
+    switch (field.type) {
+      case FieldType.CHECKBOX:
+        return {
+          ...common,
+          formatter: ({ value }: any) => (value ? '✔' : ''),
+          width: Math.max(80, field.width || 80),
+        };
+      case FieldType.SELECT:
+        return {
+          ...common,
+          formatter: ({ value }: any) => {
+            const opt = field.config?.options?.find((o: any) => o?.id === value || o?.value === value || o?.name === value || o?.label === value);
+            return ((opt as any)?.name ?? (opt as any)?.label ?? value ?? '') as string;
+          },
+        };
+      default:
+        return { ...common };
+    }
+  }
+
   switch (field.type) {
     case FieldType.NUMBER:
       return { ...common, editor: 'text', align: 'right' };

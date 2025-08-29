@@ -56,7 +56,10 @@ const ReviewTablePage: React.FC = () => {
       setAiFilling(true);
       const changedFieldId = Object.keys(data)[0];
       if (!changedFieldId) return;
-      const suggested = await reviewTableAPI.aiCompleteRow(tableId, recordId, changedFieldId);
+      const currentRow = records.find(r => r.id === recordId)?.data || {};
+      const fieldMetas = fields.map(f => ({ id: f.id, name: f.name, type: f.type, isPreset: !!f.isPreset }));
+      const hint = { changedFieldId, currentRow, fields: fieldMetas } as const;
+      const suggested = await reviewTableAPI.aiCompleteRow(tableId, recordId, changedFieldId, hint as any);
       if (suggested && Object.keys(suggested).length > 0) {
         await updateRecord(recordId, suggested);
         message.success('AI已补全本行');
@@ -69,7 +72,7 @@ const ReviewTablePage: React.FC = () => {
     } finally {
       setAiFilling(false);
     }
-  }, [tableId, updateRecord, aiFilling]);
+  }, [tableId, updateRecord, aiFilling, records, fields]);
 
   // 处理添加字段
   const handleAddField = useCallback(() => {

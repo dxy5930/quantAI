@@ -2,7 +2,7 @@
  * 表格视图组件 - 类似飞书多维表格的Grid视图
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Field, TableRecord, FieldType, RecordData, ViewConfig, Sort } from '../types';
 import { formatPrice2, formatIntegerWithThousands, formatAmountFixedUnit, formatPE2, formatPercentSmart, toNumber, formatWithThousands } from '../../../utils/formatters';
 
@@ -36,6 +36,29 @@ const GridView: React.FC<GridViewProps> = ({
   const [editingValue, setEditingValue] = useState<any>('');
   // 新增：本地排序（三态：undefined -> asc -> desc -> undefined）
   const [localSort, setLocalSort] = useState<Sort | undefined>(undefined);
+
+  // 新增：用于实现前两列 sticky 的动态 left 计算
+  const ROW_NUM_COL_WIDTH_PX = 48; // 对应 w-12（3rem）
+  const firstHeaderRef = useRef<HTMLTableCellElement | null>(null);
+  const firstBodyCellRef = useRef<HTMLTableCellElement | null>(null);
+  const [firstColWidth, setFirstColWidth] = useState<number>(160);
+
+  // 尝试测量第一数据列宽度（优先用表体首行单元格，退而求其次用表头）
+  const measureFirstCol = () => {
+    const bodyW = firstBodyCellRef.current?.getBoundingClientRect().width;
+    const headW = firstHeaderRef.current?.getBoundingClientRect().width;
+    const w = bodyW || headW;
+    if (w && Math.abs(w - firstColWidth) > 1) setFirstColWidth(w);
+  };
+
+  useEffect(() => {
+    measureFirstCol();
+    // 监听窗口尺寸变化
+    const onResize = () => measureFirstCol();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+    // 依赖可触发重新测量
+  }, [records, fields, viewConfig]);
 
   // 过滤和排序记录
   const processedRecords = useMemo(() => {
@@ -351,6 +374,12 @@ const GridView: React.FC<GridViewProps> = ({
           return <span>{formatPE2(value, 2)}</span>;
         case 'preset_turnover':
           return <span>{formatPercentSmart(value, 2)}</span>;
+        case 'preset_symbol':
+          return (
+            <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-800 font-mono text-xs">
+              {String(value)}
+            </span>
+          );
         default:
           break;
       }
@@ -463,10 +492,10 @@ const GridView: React.FC<GridViewProps> = ({
         </button>
       </div>
       {/* 表格容器 */}
-      <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto" style={{maxWidth: '100%'}}>
-        <table className="table-auto border-collapse w-max">
+      <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto w-[100vw]">
+        <table className="table-auto border-separate border-spacing-0 min-w-max">
           {/* 表头 */}
-          <thead className="bg-gray-50 sticky top-0 z-10">
+          <thead className="bg-gray-50 sticky top-0 z-30">
             <tr>
               {/* 行号列 */}
               <th className="w-12 px-2 py-3 text-left text-xs font-medium text-gray-500 border-r border-gray-200 sticky left-0 z-20 bg-gray-50">
@@ -474,10 +503,12 @@ const GridView: React.FC<GridViewProps> = ({
               </th>
               
               {/* 字段列 */}
-              {visibleFields.map(field => (
+              {visibleFields.map((field, i) => (
                 <th 
                   key={field.id}
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-500 border-r border-gray-200 whitespace-nowrap cursor-pointer select-none"
+                  className={`px-4 py-3 text-left text-xs font-medium text-gray-500 border-r border-gray-200 whitespace-nowrap cursor-pointer select-none ${i <= 1 ? 'sticky z-30 bg-gray-50' : ''}`}
+                  ref={i === 0 ? firstHeaderRef : undefined}
+                  style={i === 0 ? { left: ROW_NUM_COL_WIDTH_PX } : i === 1 ? { left: ROW_NUM_COL_WIDTH_PX + firstColWidth, boxShadow: '2px 0 0 0 rgba(229,231,235,1)' } : undefined}
                   onClick={() => toggleSort(field.id)}
                   title="点击切换排序：无序 → 升序 → 降序"
                 >
@@ -534,10 +565,12 @@ const GridView: React.FC<GridViewProps> = ({
                 </td>
                 
                 {/* 数据单元格 */}
-                {visibleFields.map(field => (
+                {visibleFields.map((field, i) => (
                   <td 
                     key={`${record.id}-${field.id}`}
-                    className="px-4 py-3 border-r border-gray-200 cursor-pointer hover:bg-blue-50 whitespace-nowrap"
+                    className={`px-4 py-3 border-r border-gray-200 cursor-pointer hover:bg-blue-50 whitespace-nowrap ${i <= 1 ? 'sticky bg-white' : ''} ${i === 1 ? 'z-20' : i === 0 ? 'z-10' : ''}`}
+                    ref={i === 0 && index === 0 ? firstBodyCellRef : undefined}
+                    style={i === 0 ? { left: ROW_NUM_COL_WIDTH_PX } : i === 1 ? { left: ROW_NUM_COL_WIDTH_PX + firstColWidth, boxShadow: '2px 0 0 0 rgba(229,231,235,1)' } : undefined}
                     onClick={() => {
                       if (editingCell?.recordId === record.id && editingCell?.fieldId === field.id) return;
                       if (field.isPreset) return; // 预设字段禁止直接编辑
@@ -566,7 +599,7 @@ const GridView: React.FC<GridViewProps> = ({
             ))}
             
             {/* 添加记录行 */}
-            {!readonly && (
+            {/* {!readonly && (
               <tr className="border-b border-gray-100">
                 <td className="w-12 px-2 py-3 text-xs text-gray-500 border-r border-gray-200">
                   +
@@ -579,7 +612,7 @@ const GridView: React.FC<GridViewProps> = ({
                   点击添加新记录
                 </td>
               </tr>
-            )}
+            )} */}
           </tbody>
         </table>
       </div>
