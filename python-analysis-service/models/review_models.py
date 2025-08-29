@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, TIMESTAMP, Boolean, Enum
+from sqlalchemy import Column, String, Text, TIMESTAMP, Boolean, Enum, text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -21,5 +21,5 @@ class Review(Base):
   content = Column(Text, nullable=True, comment='Markdown内容')
   summary = Column(Text, nullable=True, comment='摘要')
   is_deleted = Column(Boolean, default=False, nullable=False, comment='软删除')
-  created_at = Column(TIMESTAMP, default=datetime.utcnow, nullable=True)
-  updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True) 
+  created_at = Column(TIMESTAMP, nullable=True, server_default=text('CURRENT_TIMESTAMP'))
+  updated_at = Column(TIMESTAMP, nullable=True, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')) 

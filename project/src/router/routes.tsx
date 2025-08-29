@@ -16,7 +16,8 @@ const ResetPasswordPage = lazy(() => import('../pages/auth/ResetPassword'));
 const ProfilePage = lazy(() => import('../pages/user/ProfilePage'));
 const ChangePasswordPage = lazy(() => import('../pages/user/ChangePasswordPage'));
 const AIWorkflowPage = lazy(() => import('../pages/ai-workflow'));
-const ReviewPage = lazy(() => import('../pages/review/ReviewPage'));
+const ReviewTablePage = lazy(() => import('../modules/review/components/ReviewTablePage'));
+const ReviewTableListPage = lazy(() => import('../pages/review/ReviewTableListPage'));
 const PricingPage = lazy(() => import('../pages/pricing'));
 const FeedbackPage = lazy(() => import('../pages/feedback'));
 const AboutPage = lazy(() => import('../pages/about'));
@@ -95,7 +96,11 @@ export const routes: RouteObject[] = [
       // 复盘页面
       {
         path: ROUTES.REVIEW,
-        element: <RouteGuard><ReviewPage /></RouteGuard>
+        element: <RouteGuard><ReviewTableListPage /></RouteGuard>
+      },
+      {
+        path: ROUTES.REVIEW + '/:tableId',
+        element: <RouteGuard><ReviewTablePage /></RouteGuard>
       },
 
       

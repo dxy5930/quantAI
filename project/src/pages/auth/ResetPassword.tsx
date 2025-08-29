@@ -30,7 +30,7 @@ const ResetPasswordPage: React.FC = () => {
     e.preventDefault();
     
     if (!password || !confirmPassword) {
-      appStore.showError('请填写所有字段');
+      appStore.showError('请填写所有必填项');
       return;
     }
 

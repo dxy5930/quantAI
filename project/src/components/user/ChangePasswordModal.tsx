@@ -39,7 +39,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = observer(({
     
     // 基本验证
     if (!formData.currentPassword || !formData.newPassword || !formData.confirmPassword) {
-      app.showError("请填写所有字段");
+      app.showError("请填写所有必填项");
       return;
     }
 

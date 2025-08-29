@@ -145,3 +145,55 @@ export function safeGet(obj: any, path: string, defaultValue: any = undefined): 
 export function isValidNumber(value: any): value is number {
   return typeof value === 'number' && !isNaN(value) && isFinite(value);
 } 
+
+export function toNumber(value: any): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const n = typeof value === 'number' ? value : parseFloat(String(value).replace(/,/g, ''));
+  return Number.isNaN(n) ? null : n;
+}
+
+export function formatWithThousands(n: number, fractionDigits = 0): string {
+  return n.toLocaleString('zh-CN', { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits });
+}
+
+export function formatPrice2(value: any, digits = 2, dash = '-'): string {
+  const n = toNumber(value);
+  if (n === null) return dash;
+  return formatWithThousands(n, digits);
+}
+
+export function formatIntegerWithThousands(value: any, dash = '-'): string {
+  const n = toNumber(value);
+  if (n === null) return dash;
+  return formatWithThousands(Math.round(n), 0);
+}
+
+export function formatAmountWanYi(value: any, dash = '-'): string {
+  const n = toNumber(value);
+  if (n === null) return dash;
+  const abs = Math.abs(n);
+  if (abs >= 1e8) return `${formatWithThousands(n / 1e8, 2)}亿`;
+  if (abs >= 1e4) return `${formatWithThousands(n / 1e4, 2)}万`;
+  return formatWithThousands(n, 2);
+}
+
+export type AmountUnit = '亿' | '万';
+export function formatAmountFixedUnit(value: any, unit: AmountUnit = '亿', dash = '-'): string {
+  const n = toNumber(value);
+  if (n === null) return dash;
+  if (unit === '亿') return `${formatWithThousands(n / 1e8, 2)}亿`;
+  return `${formatWithThousands(n / 1e4, 2)}万`;
+}
+
+export function formatPE2(value: any, digits = 2, dash = '-'): string {
+  const n = toNumber(value);
+  if (n === null) return dash;
+  return formatWithThousands(n, digits);
+}
+
+export function formatPercentSmart(value: any, digits = 2, dash = '-'): string {
+  const n = toNumber(value);
+  if (n === null) return dash;
+  const val = Math.abs(n) <= 1 ? n * 100 : n;
+  return `${formatWithThousands(val, digits)}%`;
+} 

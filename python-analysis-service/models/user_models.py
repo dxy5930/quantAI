@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Text, TIMESTAMP, JSON, Boolean, ForeignKey
+from sqlalchemy import Column, String, Integer, Text, TIMESTAMP, JSON, Boolean, ForeignKey, text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -15,8 +15,8 @@ class User(Base):
     role = Column(String(20), default='user')
     level = Column(Integer, default=1)
     is_active = Column(Boolean, default=True)
-    created_at = Column(TIMESTAMP, default=datetime.utcnow, nullable=True)
-    updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
+    created_at = Column(TIMESTAMP, nullable=True, server_default=text('CURRENT_TIMESTAMP'))
+    updated_at = Column(TIMESTAMP, nullable=True, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
     last_login_at = Column(TIMESTAMP, nullable=True)
     
     # 个人资料字段
@@ -42,7 +42,7 @@ class Notification(Base):
     message = Column(Text, nullable=False)
     is_read = Column(Boolean, default=False, nullable=False)
     data = Column(JSON, nullable=True)  # 附加数据
-    created_at = Column(TIMESTAMP, default=datetime.utcnow, nullable=True)
+    created_at = Column(TIMESTAMP, nullable=True, server_default=text('CURRENT_TIMESTAMP'))
     
     # 关联关系
     user = relationship("User", back_populates="notifications")
@@ -56,7 +56,7 @@ class UserSession(Base):
     refresh_token = Column(String(500), nullable=False)  # 刷新令牌
     expires_at = Column(TIMESTAMP, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(TIMESTAMP, default=datetime.utcnow, nullable=True)
+    created_at = Column(TIMESTAMP, nullable=True, server_default=text('CURRENT_TIMESTAMP'))
     last_used_at = Column(TIMESTAMP, nullable=True)
     user_agent = Column(String(500), nullable=True)
     ip_address = Column(String(45), nullable=True)
