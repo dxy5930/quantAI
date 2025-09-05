@@ -33,11 +33,13 @@ from api.user_api import router as user_router
 from api.notification_api import router as notification_router
 from api.review_api import router as review_router
 from api.database_api import router as database_router
+from api.live_api import router as live_router
 from models.database import init_database
 from models.workflow_models import WorkflowInstance, WorkflowStep, WorkflowResource, WorkflowMessage  # 导入模型以确保表创建
 from models.user_models import User, Notification, UserSession  # 导入用户相关模型
 from models.review_models import Review  # 导入复盘模型以确保表创建
 from models.database_models import ReviewDatabase, ReviewDatabaseRecord, ReviewDatabaseTemplate  # 导入多维表格数据库模型
+from models.live_models import LiveChannel  # 导入直播频道模型
 
 # 配置日志 - 禁用watchfiles的频繁输出
 log_config = config.get_log_config()
@@ -91,6 +93,7 @@ app.include_router(ai_workflow_router)
 app.include_router(workflow_persistence_router)
 app.include_router(workflow_soft_delete_router)
 app.include_router(home_router)
+app.include_router(live_router)
 
 # 挂载静态文件
 uploads_dir = "uploads"

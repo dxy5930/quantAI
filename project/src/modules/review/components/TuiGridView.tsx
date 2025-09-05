@@ -29,7 +29,14 @@ const TuiGridView: React.FC<TuiGridViewProps> = ({
 
   const visibleFields = useMemo(() => {
     const baseFields = [...fields].sort((a, b) => a.order - b.order);
-    return baseFields.filter(f => !viewConfig?.hiddenFields?.includes(f.id));
+    const visible = baseFields.filter(f => !viewConfig?.hiddenFields?.includes(f.id));
+    // 确保股票代码列（preset_symbol）排在第一数据列
+    const symbolIndex = visible.findIndex(f => f.id === 'preset_symbol');
+    if (symbolIndex > 0) {
+      const [symbolField] = visible.splice(symbolIndex, 1);
+      visible.unshift(symbolField);
+    }
+    return visible;
   }, [fields, viewConfig]);
 
   const rows = useMemo(() => {
@@ -109,7 +116,7 @@ function mapFieldToColumn(field: Field) {
   };
 
   // 预设字段保持只读，不提供 editor
-  if (field.isPreset) {
+  if (field.isPreset && field.id !== 'preset_symbol') {
     switch (field.type) {
       case FieldType.CHECKBOX:
         return {
@@ -151,6 +158,10 @@ function mapFieldToColumn(field: Field) {
     case FieldType.DATETIME:
       return { ...common };
     default:
+      // 名称字段只读
+      if (field.id === 'title') {
+        return { ...common };
+      }
       return { ...common, editor: 'text' };
   }
 }

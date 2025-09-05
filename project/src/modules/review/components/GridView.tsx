@@ -18,6 +18,10 @@ interface GridViewProps {
   readonly?: boolean;
   // 新增：排序变化时回调
   onSortChange?: (sort?: Sort) => void;
+  // 新增：AI 补全加载态（来自父组件）
+  aiLoading?: boolean;
+  // 新增：正在AI补全的行ID
+  aiLoadingRowId?: string;
 }
 
 const GridView: React.FC<GridViewProps> = ({
@@ -31,6 +35,8 @@ const GridView: React.FC<GridViewProps> = ({
   onAddField,
   readonly = false,
   onSortChange,
+  aiLoading,
+  aiLoadingRowId,
 }) => {
   const [editingCell, setEditingCell] = useState<{ recordId: string; fieldId: string } | null>(null);
   const [editingValue, setEditingValue] = useState<any>('');
@@ -117,9 +123,16 @@ const GridView: React.FC<GridViewProps> = ({
   // 过滤显示的字段
   const visibleFields = useMemo(() => {
     const hidden = new Set(viewConfig?.hiddenFields || []);
-    return [...fields]
+    const sorted = [...fields]
       .filter(f => f.isPreset || !hidden.has(f.id)) // 预设字段始终可见
       .sort((a, b) => a.order - b.order);
+    // 确保股票代码列（preset_symbol）排在第一数据列
+    const symbolIndex = sorted.findIndex(f => f.id === 'preset_symbol');
+    if (symbolIndex > 0) {
+      const [symbolField] = sorted.splice(symbolIndex, 1);
+      sorted.unshift(symbolField);
+    }
+    return sorted;
   }, [fields, viewConfig]);
 
   // 开始编辑单元格
@@ -242,6 +255,11 @@ const GridView: React.FC<GridViewProps> = ({
       case FieldType.SELECT: {
         const options = field.config?.options || [];
         if (!options.length) {
+          // 若无选项但当前单元格已有值，则自动以当前值创建一个选项，避免初始显示“请选择”
+          if (value) {
+            const newOpt = { id: `opt_${Date.now()}`, name: String(value) } as any;
+            onFieldUpdate(field.id, { config: { ...(field.config || {}), options: [newOpt] } as any });
+          }
           const handleGenerateFromData = () => {
             const uniq = new Set<string>();
             records.forEach(r => {
@@ -281,6 +299,11 @@ const GridView: React.FC<GridViewProps> = ({
           const matched = options.find(opt => getOptionName(opt) === value);
           return matched ? getOptionId(matched) : '';
         })();
+        // 新增：当有值但不在选项中，自动追加到选项
+        if (value && !options.some(opt => getOptionId(opt) === value || getOptionName(opt) === value)) {
+          const newOpt = { id: `opt_${Date.now()}`, name: String(value) } as any;
+          onFieldUpdate(field.id, { config: { ...(field.config || {}), options: [...options, newOpt] } as any });
+        }
         return (
           <select
             {...baseProps}
@@ -358,7 +381,7 @@ const GridView: React.FC<GridViewProps> = ({
     }
 
     // 预设数值格式优先
-    if (field.isPreset) {
+    if (field.isPreset || field.id === 'preset_symbol') {
       switch (field.id) {
         case 'preset_open':
         case 'preset_high':
@@ -477,18 +500,28 @@ const GridView: React.FC<GridViewProps> = ({
     <div className="h-full flex flex-col bg-white min-h-0 overflow-auto">
       {/* 工具栏 */}
       <div className="px-4 py-2 border-b border-gray-200 flex items-center gap-2 justify-end bg-white sticky top-0 z-20">
+        {/* AI 加载指示 */}
+        {aiLoading && (
+          <div className="flex items-center text-blue-600 text-sm mr-2" title="AI补全运行中...">
+            <svg className="animate-spin h-4 w-4 mr-1" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+            正在AI补全...
+          </div>
+        )}
         <button
           type="button"
-          className={`px-3 py-1 rounded text-sm border ${editingCell ? 'text-blue-600 border-blue-200 hover:bg-blue-50' : 'text-gray-400 border-gray-200 cursor-not-allowed'}`}
-          disabled={!editingCell}
-          title={editingCell ? '保存当前单元格并AI补全同行' : '点击某个单元格开始编辑以启用'}
+          className={`px-3 py-1 rounded text-sm border ${editingCell ? 'text-blue-600 border-blue-200 hover:bg-blue-50' : 'text-gray-400 border-gray-200 cursor-not-allowed'} ${aiLoading ? 'opacity-60 cursor-wait' : ''}`}
+          disabled={!editingCell || !!aiLoading}
+          title={editingCell ? (aiLoading ? 'AI正在补全...' : '保存当前单元格并AI补全同行') : '点击某个单元格开始编辑以启用'}
           onClick={() => {
-            if (!editingCell) return;
+            if (!editingCell || aiLoading) return;
             // 触发保存，从而使用上层包装的 onRecordUpdate 调用AI
             saveEdit();
           }}
         >
-          AI补全本行
+          {aiLoading ? 'AI补全中...' : 'AI补全本行'}
         </button>
       </div>
       {/* 表格容器 */}
@@ -515,7 +548,7 @@ const GridView: React.FC<GridViewProps> = ({
                   <div className="flex items-center justify-between group">
                     <span className="truncate whitespace-nowrap" title={field.name}>
                       {field.name}
-                      {field.isPreset && <span className="ml-1 text-gray-400" title="预设字段，结构只读">🔒</span>}
+                      {( (field.isPreset && field.id !== 'preset_symbol') || field.id === 'title') && <span className="ml-1 text-gray-400" title="预设字段，结构只读">🔒</span>}
                     </span>
                     <span className="flex items-center text-gray-400 ml-1">
                       {/* 字段类型标记 */}
@@ -544,7 +577,7 @@ const GridView: React.FC<GridViewProps> = ({
                     title="添加指标"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      <path d="M12 5v14M5 12h14" strokeWidth={2} strokeLinecap="round" />
                     </svg>
                   </button>
                 </th>
@@ -557,7 +590,7 @@ const GridView: React.FC<GridViewProps> = ({
             {processedRecords.map((record, index) => (
               <tr 
                 key={record.id}
-                className="border-b border-gray-100 hover:bg-gray-50 group"
+                className={`border-b border-gray-100 hover:bg-gray-50 group ${aiLoading && aiLoadingRowId === record.id ? 'ai-row-disabled' : ''}`}
               >
                 {/* 行号 */}
                 <td className="w-12 px-2 py-3 text-xs text-gray-500 border-r border-gray-200 sticky left-0 z-10 bg-white">
@@ -573,7 +606,7 @@ const GridView: React.FC<GridViewProps> = ({
                     style={i === 0 ? { left: ROW_NUM_COL_WIDTH_PX } : i === 1 ? { left: ROW_NUM_COL_WIDTH_PX + firstColWidth, boxShadow: '2px 0 0 0 rgba(229,231,235,1)' } : undefined}
                     onClick={() => {
                       if (editingCell?.recordId === record.id && editingCell?.fieldId === field.id) return;
-                      if (field.isPreset) return; // 预设字段禁止直接编辑
+                      if ((field.isPreset && field.id !== 'preset_symbol') || field.id === 'title') return; // 预设字段（除股票代码）与名称字段禁止直接编辑
                       startEditing(record.id, field.id, record.data[field.id])
                     }}
                   >

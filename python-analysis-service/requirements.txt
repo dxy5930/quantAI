@@ -29,3 +29,6 @@ email-validator==2.1.0
 # 文件处理
 Pillow>=11.0.0
 python-multipart==0.0.6
+
+# 行情数据
+akshare>=1.13.0

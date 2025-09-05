@@ -563,3 +563,25 @@
     transform: scale(1) translateY(0) rotate(0deg);
   }
 }
+
+/* AI行波纹加载效果（所有单元格含 sticky） */
+@keyframes row-shimmer-x {
+  0% { background-position: -150% 0; }
+  50% { background-position: 150% 0; }
+  100% { background-position: -150% 0; }
+}
+.ai-row-loading > td { position: relative; }
+.ai-row-loading > td::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(90deg, rgba(59,130,246,0.06) 25%, rgba(59,130,246,0.18) 50%, rgba(59,130,246,0.06) 75%);
+  background-size: 200% 100%;
+  animation: row-shimmer-x 1.4s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+/* 确保单元格内容位于覆盖层之上 */
+.ai-row-loading > td > * { position: relative; z-index: 1; }
+/* 禁用点击 */
+.ai-row-disabled { pointer-events: none; }

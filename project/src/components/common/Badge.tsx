@@ -1,9 +1,15 @@
 import React from "react";
-import * as LucideIcons from "lucide-react";
+import { Star, Crown, Sparkles } from "lucide-react";
+
+const iconMap = {
+  Star,
+  Crown,
+  Sparkles,
+};
 
 interface BadgeProps {
   /** Lucide 图标库中的图标名称 */
-  icon: keyof typeof LucideIcons;
+  icon: keyof typeof iconMap;
   /** 可选的文本内容，显示在图标旁边 */
   text?: string;
   /** 徽章的颜色变体 */
@@ -109,7 +115,7 @@ export const Badge: React.FC<BadgeProps> = ({
   const sizeClasses = getSizeClasses(size);
 
   // 动态获取图标组件
-  const IconComponent = LucideIcons[icon] as React.ComponentType<{
+  const IconComponent = iconMap[icon] as React.ComponentType<{
     className?: string;
   }>;
 

@@ -29,7 +29,7 @@ export interface UseTableReturn {
   updateTableInfo: (updates: Partial<Pick<Table, 'name' | 'description' | 'icon'>>) => Promise<void>;
   
   // 字段操作
-  createField: (params: CreateFieldParams) => Promise<void>;
+  createField: (params: CreateFieldParams) => Promise<Field>;
   updateField: (fieldId: string, updates: Partial<Field>) => Promise<void>;
   deleteField: (fieldId: string) => Promise<void>;
   
@@ -97,13 +97,15 @@ export function useTable({ tableId, autoRefresh = false, refreshInterval = 30000
 
   // 字段操作
   const createField = useCallback(async (params: CreateFieldParams) => {
-    if (!tableId) return;
+    if (!tableId) throw new Error('tableId is required');
     
     try {
       const newField = await reviewTableAPI.createField(tableId, params);
       setFields(prev => [...prev, newField]);
+      return newField as Field;
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建字段失败');
+      throw err instanceof Error ? err : new Error('创建字段失败');
     }
   }, [tableId]);
 

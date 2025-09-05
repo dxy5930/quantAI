@@ -13,6 +13,7 @@ import EditFieldModal from './EditFieldModal';
 import FieldManagerPanel from './FieldManagerPanel';
 import { reviewTableAPI } from '../services/api';
 import { message } from '../../../utils/message';
+import AnalyticsTab from './AnalyticsTab';
 
 const ReviewTablePage: React.FC = () => {
   const { tableId } = useParams<{ tableId: string }>();
@@ -21,6 +22,8 @@ const ReviewTablePage: React.FC = () => {
   const [showFieldManager, setShowFieldManager] = useState(false);
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [aiFilling, setAiFilling] = useState(false);
+  const [aiFillingRowId, setAiFillingRowId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'table' | 'analytics'>('table');
 
   const {
     table,
@@ -54,15 +57,39 @@ const ReviewTablePage: React.FC = () => {
     try {
       if (aiFilling) return; // 避免并发重复
       setAiFilling(true);
+      setAiFillingRowId(recordId);
       const changedFieldId = Object.keys(data)[0];
       if (!changedFieldId) return;
+      const changedValue = (data as any)[changedFieldId];
       const currentRow = records.find(r => r.id === recordId)?.data || {};
       const fieldMetas = fields.map(f => ({ id: f.id, name: f.name, type: f.type, isPreset: !!f.isPreset }));
-      const hint = { changedFieldId, currentRow, fields: fieldMetas } as const;
+      const hint = { changedFieldId, changedValue, currentRow, fields: fieldMetas } as const;
       const suggested = await reviewTableAPI.aiCompleteRow(tableId, recordId, changedFieldId, hint as any);
       if (suggested && Object.keys(suggested).length > 0) {
-        await updateRecord(recordId, suggested);
-        message.success('AI已补全本行');
+        // 判断是否为“股票代码”字段
+        const f = fields.find(x => x.id === changedFieldId);
+        const name = (f?.name || '').toLowerCase();
+        const isCodeField = f?.id === 'preset_symbol' || ['code','symbol','stock_code'].includes((f?.id || '').toLowerCase()) || name.includes('代码');
+        if (isCodeField) {
+          // 代码变更：直接应用全部建议（覆盖）
+          await updateRecord(recordId, suggested);
+          message.success('已根据新代码重新补全本行');
+        } else {
+          // 非代码变更：仅填充空值，不覆盖已有
+          const onlyEmpty: Record<string, any> = {};
+          for (const [k, v] of Object.entries(suggested)) {
+            const curr = (currentRow as any)[k];
+            if (curr === undefined || curr === null || curr === '') {
+              onlyEmpty[k] = v;
+            }
+          }
+          if (Object.keys(onlyEmpty).length > 0) {
+            await updateRecord(recordId, onlyEmpty);
+            message.success('已填充空白字段');
+          } else {
+            message.info('无空白字段可填充');
+          }
+        }
       } else {
         message.info('AI没有可补全的内容');
       }
@@ -71,6 +98,7 @@ const ReviewTablePage: React.FC = () => {
       message.warning('AI补全失败或无建议');
     } finally {
       setAiFilling(false);
+      setAiFillingRowId(null);
     }
   }, [tableId, updateRecord, aiFilling, records, fields]);
 
@@ -79,9 +107,28 @@ const ReviewTablePage: React.FC = () => {
     setShowAddFieldModal(true);
   }, []);
 
-  const handleSubmitNewField = useCallback((params: CreateFieldParams) => {
-    createField(params);
-  }, [createField]);
+  const handleSubmitNewField = useCallback(async (params: CreateFieldParams) => {
+    const newField = await createField(params);
+    try {
+      // 为现有每行补全新字段（仅填充空值）
+      const fieldId = newField.id;
+      for (const r of records) {
+        const hasVal = r.data && r.data[fieldId] !== undefined && r.data[fieldId] !== '';
+        if (hasVal) continue;
+        // 触发一次“无值编辑”以复用 AI 补全逻辑：直接调用后端 AI 接口
+        const suggested = await reviewTableAPI.aiCompleteRow(tableId!, r.id, fieldId, {
+          changedFieldId: fieldId,
+          currentRow: r.data,
+        } as any);
+        if (suggested && suggested[fieldId] !== undefined) {
+          await updateRecord(r.id, { [fieldId]: suggested[fieldId] });
+        }
+      }
+      message.success('已为新指标尝试自动补全现有记录');
+    } catch (e) {
+      console.warn('新增字段自动补全失败', e);
+    }
+  }, [createField, records, tableId, updateRecord]);
 
   // 字段管理逻辑
   const handleToggleHide = useCallback((fieldId: string, hide: boolean) => {
@@ -200,6 +247,8 @@ const ReviewTablePage: React.FC = () => {
                 loadRecords({} as any);
               }
             }}
+            aiLoading={aiFilling}
+            aiLoadingRowId={aiFillingRowId || undefined}
           />
         );
       
@@ -212,7 +261,7 @@ const ReviewTablePage: React.FC = () => {
       default:
         return <div className="flex-1 flex items-center justify-center text-gray-500">不支持的视图类型</div>;
     }
-  }, [currentView, fields, records, updateRecordWithAI, deleteRecord, updateField, handleAddRecord, handleAddField, loadRecords]);
+  }, [currentView, fields, records, updateRecordWithAI, deleteRecord, updateField, handleAddRecord, handleAddField, loadRecords, aiFilling, aiFillingRowId]);
 
   if (loading) {
     return (
@@ -323,34 +372,45 @@ const ReviewTablePage: React.FC = () => {
 
       {/* 视图切换栏 */}
       <div className="bg-white border-b border-gray-200 px-6 py-2">
-        <div className="flex items-center space-x-1">
-          {views.map(view => (
+        <div className="flex items-center justify-between space-x-1">
+          <div className="flex items-center space-x-1">
+            {views.map(view => (
+              <button
+                key={view.id}
+                onClick={() => { setActiveTab('table'); handleViewSwitch(view.id); }}
+                className={`px-3 py-1.5 text-sm rounded flex items-center space-x-1 ${
+                  currentView?.id === view.id && activeTab === 'table'
+                    ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                <span className="text-xs">
+                  {view.type === ViewType.GRID && '📋'}
+                  {view.type === ViewType.KANBAN && '📌'}
+                  {view.type === ViewType.CALENDAR && '📅'}
+                  {view.type === ViewType.GALLERY && '🖼️'}
+                </span>
+                <span>{view.name}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center space-x-1">
             <button
-              key={view.id}
-              onClick={() => handleViewSwitch(view.id)}
-              className={`px-3 py-1.5 text-sm rounded flex items-center space-x-1 ${
-                currentView?.id === view.id
-                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
+              onClick={() => setActiveTab('table')}
+              className={`px-3 py-1.5 text-sm rounded ${activeTab === 'table' ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'text-gray-600 hover:bg-gray-100'}`}
+              title="表格视图"
             >
-              <span className="text-xs">
-                {view.type === ViewType.GRID && '📋'}
-                {view.type === ViewType.KANBAN && '📌'}
-                {view.type === ViewType.CALENDAR && '📅'}
-                {view.type === ViewType.GALLERY && '🖼️'}
-              </span>
-              <span>{view.name}</span>
+              表格视图
             </button>
-          ))}
-          
-          {/* <button
-            onClick={() => {}}
-            className="px-2 py-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded text-sm"
-            title="添加视图"
-          >
-            + 视图
-          </button> */}
+            <button
+              onClick={() => setActiveTab('analytics')}
+              className={`px-3 py-1.5 text-sm rounded ${activeTab === 'analytics' ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'text-gray-600 hover:bg-gray-100'}`}
+              title="基于当前表格数据的可视化分析"
+            >
+              可视化分析
+            </button>
+          </div>
         </div>
       </div>
 
@@ -358,7 +418,11 @@ const ReviewTablePage: React.FC = () => {
       <div className="flex-1 flex min-h-0">
         {/* 视图内容 */}
         <div className="flex-1 flex flex-col min-h-0">
-          {renderViewContent()}
+          {activeTab === 'analytics' ? (
+            <AnalyticsTab fields={fields} records={records} />
+          ) : (
+            renderViewContent()
+          )}
         </div>
       </div>
 

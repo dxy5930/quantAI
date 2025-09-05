@@ -17,6 +17,9 @@ export const ROUTES = {
   // 复盘功能
   REVIEW: '/review',
   
+  // 直播
+  LIVE: '/live',
+  
   // 其他页面
   ABOUT: '/about',
   HELP: '/help',
@@ -96,6 +99,13 @@ export const PAGE_METADATA = {
     title: '复盘',
     description: '交易复盘分析页面',
     requiresAuth: true,
+    layout: 'default',
+  },
+  [ROUTES.LIVE]: {
+    path: ROUTES.LIVE,
+    title: '直播',
+    description: '实时直播与评论',
+    requiresAuth: false,
     layout: 'default',
   },
   [ROUTES.ABOUT]: {

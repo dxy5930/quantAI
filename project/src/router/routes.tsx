@@ -22,6 +22,7 @@ const PricingPage = lazy(() => import('../pages/pricing'));
 const FeedbackPage = lazy(() => import('../pages/feedback'));
 const AboutPage = lazy(() => import('../pages/about'));
 const NotificationCenter = lazy(() => import('../pages/notification'));
+const LivePage = lazy(() => import('../pages/live'));
 
 // 错误页面组件
 const NotFoundPage = lazy(() => import('../pages/error/NotFoundPage'));
@@ -103,6 +104,11 @@ export const routes: RouteObject[] = [
         element: <RouteGuard><ReviewTablePage /></RouteGuard>
       },
 
+      // 直播（无需登录）
+      {
+        path: ROUTES.LIVE,
+        element: <LivePage />
+      },
       
       // 其他页面
       {
@@ -137,8 +143,6 @@ export const routes: RouteObject[] = [
       }
     ]
   },
-
-
 
   // 错误页面路由（使用最小布局）
   {

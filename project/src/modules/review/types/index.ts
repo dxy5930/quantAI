@@ -87,6 +87,8 @@ export interface FieldConfig {
       responsePath?: string;
     };
   };
+  // 新增：直接映射到后端事实键（如 open/high/amount 等）
+  mapsTo?: string;
 }
 
 // 字段定义

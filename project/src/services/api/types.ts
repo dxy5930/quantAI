@@ -1,123 +1,88 @@
-
-
-// 分页参数类型
-export interface PaginationParams {
-  page?: number;
-  limit?: number;
-  sortBy?: string;
-  sortOrder?: 'ASC' | 'DESC';
-}
-
-// 分页响应类型
-export interface ListResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  limit: number;
-  total_pages: number;
-}
-
-// 用户等级枚举
-export enum UserLevel {
-  NORMAL = 1,    // 普通用户
-  PREMIUM = 2,   // 高级用户
-  SUPER = 3,     // 超级用户
-}
-
-// 用户信息类型
-export interface UserInfo {
-  id: string;
-  email: string;
-  username: string;
-  avatar?: string;
-  role: 'user' | 'admin';
-  level?: UserLevel; // 用户等级
-  createdAt: string;
-  updatedAt?: string;
-  lastLoginAt?: string;
-  // 支持嵌套和平铺两种结构
-  profile?: {
-    displayName: string;
-    tradingExperience: 'beginner' | 'intermediate' | 'advanced' | 'expert';
-    riskTolerance: 'low' | 'medium' | 'high';
-  };
-  // 后端直接返回的平铺字段
-  displayName?: string;
-  tradingExperience?: 'beginner' | 'intermediate' | 'advanced' | 'expert';
-  riskTolerance?: 'low' | 'medium' | 'high';
-}
-
-// 策略类型
-export interface Strategy {
-  favorites: any;
-  likes: any;
-  icon: any;
-  id: string;
-  name: string;
-  description: string;
-  type: string;
-  parameters: Record<string, any>;
-  user_id: string;
-  created_at: string;
-  updated_at: string;
-  is_public: boolean;
-}
-
-
-
-// AI分析结果类型
-export interface AIAnalysis {
-  analysis_text: string;
-  investment_rating: 'strongly_buy' | 'buy' | 'hold' | 'sell' | 'strongly_sell' | '强烈推荐' | '推荐' | '中性' | '谨慎' | '不推荐';
-  risk_warnings: string[];
-  optimization_suggestions: string[];
-  generated_at: string;
-}
-
-
-
-// 认证相关类型
-export interface LoginRequest {
-  username: string;
-  password: string;
-}
-
-export interface RegisterRequest {
-  email: string;
-  password: string;
-  confirmPassword: string;
-  username?: string;
-}
+import { ApiResponse } from '../../types';
 
 export interface AuthResponse {
-  access_token: string;
-  refresh_token: string;
-  expires_in: number;
-  user: UserInfo;
+  user: any;
+  token: string;
+  refreshToken?: string;
 }
 
-// 通知类型
-export interface Notification {
+export interface NotificationItem {
   id: string;
-  type: string;
   title: string;
-  message: string;
+  content: string;
+  type: 'info' | 'warning' | 'success' | 'error';
+  createdAt: string;
   read: boolean;
-  created_at: string;
-  data?: any;
 }
 
-// 系统状态类型
-export interface SystemStatus {
-  status: 'healthy' | 'degraded' | 'down';
-  timestamp: string;
-  version: string;
-  uptime: number;
-  services: {
-    database: 'up' | 'down';
-    redis: 'up' | 'down';
-    queue: 'up' | 'down';
-  };
+export interface ReviewTableInfo {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt?: string;
 }
+
+// 频道定义（频道即老师）
+export interface LiveChannel {
+  id: string;
+  name: string;
+  streamUrl: string;
+  room?: string;
+  order?: number;
+  isActive?: boolean;
+  teacherId?: string | null;
+}
+
+export type LiveChannelListResponse = ApiResponse<LiveChannel[]>;
+
+export interface LiveAccessCheckResult {
+  allowed: boolean;
+  reason: 'public' | 'subscribed' | 'not_subscribed';
+  endAt?: string;
+  teacherId?: string;
+}
+
+export type LiveAccessCheckResponse = ApiResponse<LiveAccessCheckResult>;
+
+// 订单/支付
+export interface LiveOrderSummary {
+  id: string;
+  channelId: string;
+  teacherId: string;
+  durationDays: number;
+  amountCents: number;
+  currency: 'CNY' | string;
+  payMethod?: 'wechat' | 'alipay' | 'bankcard' | string;
+  status: 'PENDING' | 'PAID' | 'CANCELED' | string;
+  createdAt?: string;
+}
+
+export interface PayResult {
+  paid: boolean;
+  orderId: string;
+  channelId: string;
+  teacherId: string;
+  expiresAt: string;
+  amountCents: number;
+  currency: 'CNY' | string;
+}
+
+export type CreateOrderResponse = ApiResponse<LiveOrderSummary>;
+export type PayOrderResponse = ApiResponse<PayResult>;
+
+// 推广信息
+export interface LivePromo {
+  title: string;
+  description: string;
+  bulletPoints: string[];
+  qrUrl: string;
+  contact: string;
+  teacherId: string;
+  channelId: string;
+  expiresAt: string;
+}
+
+export type LivePromoResponse = ApiResponse<LivePromo>;
 
  

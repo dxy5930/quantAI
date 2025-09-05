@@ -1,8 +1,13 @@
 import { UserLevel } from '../types';
-import * as LucideIcons from 'lucide-react';
+import { Star, Crown } from 'lucide-react';
+
+const iconMap = {
+  Star,
+  Crown,
+};
 
 export interface BadgeConfig {
-  icon: keyof typeof LucideIcons;
+  icon: keyof typeof iconMap;
   text: string;
   variant: 'gold' | 'purple' | 'blue' | 'green' | 'red';
 }
