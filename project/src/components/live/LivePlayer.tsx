@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from "react";
 
 // 轻量封装直播播放器，默认支持 HLS（m3u8）；其他协议走 <video> 原生能力
 export interface LivePlayerProps {
@@ -18,14 +18,14 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   muted = true,
   autoPlay = true,
   controls = true,
-  className = '',
+  className = "",
   blocked = false,
   overlay,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<boolean>(false);
-  const [errorMessage, setErrorMessage] = useState<string>('暂无直播');
+  const [errorMessage, setErrorMessage] = useState<string>("暂无直播");
   const playingRef = useRef<boolean>(false);
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
 
     // 初始状态
     setError(!src);
-    setErrorMessage('暂无直播');
+    setErrorMessage("暂无直播");
     setLoading(!!src);
     playingRef.current = false;
     if (!src) return;
@@ -57,49 +57,63 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
     };
 
     const setup = async () => {
-      const isHls = src.endsWith('.m3u8') || src.includes('.m3u8');
+      const isHls = src.endsWith(".m3u8") || src.includes(".m3u8");
       if (!isHls) {
         video.src = src;
         const onLoadedMeta = hideLoading;
         const onLoadedData = hideLoading;
         const onCanPlay = hideLoading;
-        const onPlaying = () => { playingRef.current = true; hideLoading(); };
-        const onPlay = () => { playingRef.current = true; hideLoading(); };
-        const onPause = () => { playingRef.current = false; hideLoading(); };
+        const onPlaying = () => {
+          playingRef.current = true;
+          hideLoading();
+        };
+        const onPlay = () => {
+          playingRef.current = true;
+          hideLoading();
+        };
+        const onPause = () => {
+          playingRef.current = false;
+          hideLoading();
+        };
         const onTimeUpdate = hideLoading;
         const onWaiting = showLoadingIfPlaying;
         const onStalled = showLoadingIfPlaying;
-        const onError = () => { setError(true); hideLoading(); };
-
-        video.addEventListener('loadedmetadata', onLoadedMeta);
-        video.addEventListener('loadeddata', onLoadedData);
-        video.addEventListener('canplay', onCanPlay);
-        video.addEventListener('playing', onPlaying);
-        video.addEventListener('play', onPlay);
-        video.addEventListener('pause', onPause);
-        video.addEventListener('timeupdate', onTimeUpdate);
-        video.addEventListener('waiting', onWaiting);
-        video.addEventListener('stalled', onStalled);
-        video.addEventListener('error', onError);
-
-        cleanupVideoEvents = () => {
-          video.removeEventListener('loadedmetadata', onLoadedMeta);
-          video.removeEventListener('loadeddata', onLoadedData);
-          video.removeEventListener('canplay', onCanPlay);
-          video.removeEventListener('playing', onPlaying);
-          video.removeEventListener('play', onPlay);
-          video.removeEventListener('pause', onPause);
-          video.removeEventListener('timeupdate', onTimeUpdate);
-          video.removeEventListener('waiting', onWaiting);
-          video.removeEventListener('stalled', onStalled);
-          video.removeEventListener('error', onError);
+        const onError = () => {
+          setError(true);
+          hideLoading();
         };
 
-        try { await video.play(); } catch {}
+        video.addEventListener("loadedmetadata", onLoadedMeta);
+        video.addEventListener("loadeddata", onLoadedData);
+        video.addEventListener("canplay", onCanPlay);
+        video.addEventListener("playing", onPlaying);
+        video.addEventListener("play", onPlay);
+        video.addEventListener("pause", onPause);
+        video.addEventListener("timeupdate", onTimeUpdate);
+        video.addEventListener("waiting", onWaiting);
+        video.addEventListener("stalled", onStalled);
+        video.addEventListener("error", onError);
+
+        cleanupVideoEvents = () => {
+          video.removeEventListener("loadedmetadata", onLoadedMeta);
+          video.removeEventListener("loadeddata", onLoadedData);
+          video.removeEventListener("canplay", onCanPlay);
+          video.removeEventListener("playing", onPlaying);
+          video.removeEventListener("play", onPlay);
+          video.removeEventListener("pause", onPause);
+          video.removeEventListener("timeupdate", onTimeUpdate);
+          video.removeEventListener("waiting", onWaiting);
+          video.removeEventListener("stalled", onStalled);
+          video.removeEventListener("error", onError);
+        };
+
+        try {
+          await video.play();
+        } catch {}
         return;
       }
 
-      const HlsModule = await import('hls.js').catch(() => null);
+      const HlsModule = await import("hls.js").catch(() => null);
       const Hls = HlsModule?.default;
       if (Hls && Hls.isSupported()) {
         hls = new Hls({ enableWorker: true });
@@ -119,16 +133,16 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
           if (status === 404) {
             setError(true);
             hideLoading();
-            setErrorMessage('直播地址不存在 (404)');
+            setErrorMessage("直播地址不存在 (404)");
             return;
           }
           if (isFatal) {
             setError(true);
             hideLoading();
-            setErrorMessage('直播播放失败');
+            setErrorMessage("直播播放失败");
           }
         });
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
         video.src = src;
       } else {
         // 回退：直接赋值，可能不支持
@@ -138,43 +152,57 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
       const onLoadedMeta = hideLoading;
       const onLoadedData = hideLoading;
       const onCanPlay = hideLoading;
-      const onPlaying = () => { playingRef.current = true; hideLoading(); };
-      const onPlay = () => { playingRef.current = true; hideLoading(); };
-      const onPause = () => { playingRef.current = false; hideLoading(); };
+      const onPlaying = () => {
+        playingRef.current = true;
+        hideLoading();
+      };
+      const onPlay = () => {
+        playingRef.current = true;
+        hideLoading();
+      };
+      const onPause = () => {
+        playingRef.current = false;
+        hideLoading();
+      };
       const onTimeUpdate = hideLoading;
       const onWaiting = showLoadingIfPlaying;
       const onStalled = showLoadingIfPlaying;
-      const onError = () => { setError(true); hideLoading(); };
+      const onError = () => {
+        setError(true);
+        hideLoading();
+      };
 
-      video.addEventListener('loadedmetadata', onLoadedMeta);
-      video.addEventListener('loadeddata', onLoadedData);
-      video.addEventListener('canplay', onCanPlay);
-      video.addEventListener('playing', onPlaying);
-      video.addEventListener('play', onPlay);
-      video.addEventListener('pause', onPause);
-      video.addEventListener('timeupdate', onTimeUpdate);
-      video.addEventListener('waiting', onWaiting);
-      video.addEventListener('stalled', onStalled);
-      video.addEventListener('error', onError);
+      video.addEventListener("loadedmetadata", onLoadedMeta);
+      video.addEventListener("loadeddata", onLoadedData);
+      video.addEventListener("canplay", onCanPlay);
+      video.addEventListener("playing", onPlaying);
+      video.addEventListener("play", onPlay);
+      video.addEventListener("pause", onPause);
+      video.addEventListener("timeupdate", onTimeUpdate);
+      video.addEventListener("waiting", onWaiting);
+      video.addEventListener("stalled", onStalled);
+      video.addEventListener("error", onError);
 
       cleanupVideoEvents = () => {
-        video.removeEventListener('loadedmetadata', onLoadedMeta);
-        video.removeEventListener('loadeddata', onLoadedData);
-        video.removeEventListener('canplay', onCanPlay);
-        video.removeEventListener('playing', onPlaying);
-        video.removeEventListener('play', onPlay);
-        video.removeEventListener('pause', onPause);
-        video.removeEventListener('timeupdate', onTimeUpdate);
-        video.removeEventListener('waiting', onWaiting);
-        video.removeEventListener('stalled', onStalled);
-        video.removeEventListener('error', onError);
+        video.removeEventListener("loadedmetadata", onLoadedMeta);
+        video.removeEventListener("loadeddata", onLoadedData);
+        video.removeEventListener("canplay", onCanPlay);
+        video.removeEventListener("playing", onPlaying);
+        video.removeEventListener("play", onPlay);
+        video.removeEventListener("pause", onPause);
+        video.removeEventListener("timeupdate", onTimeUpdate);
+        video.removeEventListener("waiting", onWaiting);
+        video.removeEventListener("stalled", onStalled);
+        video.removeEventListener("error", onError);
       };
     };
 
     const cleanup = () => {
       cleanupVideoEvents?.();
       if (hls) {
-        try { hls.destroy(); } catch {}
+        try {
+          hls.destroy();
+        } catch {}
         hls = null;
       }
     };
@@ -184,7 +212,9 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   }, [src, blocked]);
 
   return (
-    <div className={`w-full h-full bg-black rounded-xl overflow-hidden relative ${className}`}>
+    <div
+      className={`relative w-full aspect-[16/9] bg-black rounded-xl overflow-hidden ${className}`}
+    >
       {!blocked && (
         <video
           ref={videoRef}
@@ -224,4 +254,4 @@ export const LivePlayer: React.FC<LivePlayerProps> = ({
   );
 };
 
-export default LivePlayer; 
+export default LivePlayer;
