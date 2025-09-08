@@ -20,6 +20,7 @@ export class WebSocketClient {
   private reconnectAttempts = 0;
   private heartbeatTimer: any = null;
   private manuallyClosed = false;
+  private pendingMessages: WebSocketMessage[] = [];
 
   constructor(options: WebSocketClientOptions) {
     this.options = {
@@ -45,10 +46,14 @@ export class WebSocketClient {
   }
 
   public send(message: WebSocketMessage) {
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
     const payload = typeof message === 'string' || message instanceof Blob || message instanceof ArrayBuffer || ArrayBuffer.isView(message)
       ? message
       : JSON.stringify(message);
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      // 未连接时先入队，连接建立后自动发送
+      this.pendingMessages.push(payload as any);
+      return;
+    }
     this.socket.send(payload as any);
   }
 
@@ -63,8 +68,11 @@ export class WebSocketClient {
 
     this.socket.onopen = (ev) => {
       this.reconnectAttempts = 0;
+      // 先回调，外部通常会在此发送 join
       this.options.onOpen?.(ev);
       this.startHeartbeat();
+      // 再异步刷新队列，确保 join 优先
+      setTimeout(() => this.flushPending(), 0);
     };
 
     this.socket.onmessage = (ev) => {
@@ -86,6 +94,17 @@ export class WebSocketClient {
         this.scheduleReconnect();
       }
     };
+  }
+
+  private flushPending() {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    if (this.pendingMessages.length === 0) return;
+    const queue = this.pendingMessages.splice(0, this.pendingMessages.length);
+    for (const payload of queue) {
+      try {
+        this.socket.send(payload as any);
+      } catch {}
+    }
   }
 
   private scheduleReconnect() {

@@ -40,6 +40,7 @@ from models.user_models import User, Notification, UserSession  # 导入用户�
 from models.review_models import Review  # 导入复盘模型以确保表创建
 from models.database_models import ReviewDatabase, ReviewDatabaseRecord, ReviewDatabaseTemplate  # 导入多维表格数据库模型
 from models.live_models import LiveChannel  # 导入直播频道模型
+from api.live_ws import router as live_ws_router
 
 # 配置日志 - 禁用watchfiles的频繁输出
 log_config = config.get_log_config()
@@ -94,6 +95,7 @@ app.include_router(workflow_persistence_router)
 app.include_router(workflow_soft_delete_router)
 app.include_router(home_router)
 app.include_router(live_router)
+app.include_router(live_ws_router)
 
 # 挂载静态文件
 uploads_dir = "uploads"
@@ -151,5 +153,6 @@ if __name__ == "__main__":
         loop="asyncio",  # 明确指定事件循环类型
         limit_concurrency=1000,  # 增加并发限制
         limit_max_requests=10000,  # 增加最大请求数
-        backlog=2048  # 增加连接队列大小
+        backlog=2048,  # 增加连接队列大小
+        ws="wsproto",  # 使用 wsproto 实现，兼容性更好
     )

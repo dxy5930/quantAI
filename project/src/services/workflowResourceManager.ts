@@ -198,8 +198,18 @@ class WorkflowResourceManager {
     stepId?: string;
   }) {
     const list = this.resources.get(params.workflowId) || [];
+    // 生成强唯一ID（时间戳 + 随机 + 防撞重试）
+    const base = `${params.stepId || 'local'}_file_${Date.now()}`;
+    let uniqueId = `${base}_${Math.random().toString(36).slice(2, 8)}`;
+    const exists = (id: string) => list.some(r => r.id === id);
+    let tries = 0;
+    while (exists(uniqueId) && tries < 3) {
+      uniqueId = `${base}_${Math.random().toString(36).slice(2, 8)}`;
+      tries += 1;
+    }
+
     const resource: WorkflowResource = {
-      id: `${params.stepId || 'local'}_file_${Date.now()}`,
+      id: uniqueId,
       type: 'file',
       title: params.title || params.filename,
       description: params.description,
@@ -217,6 +227,12 @@ class WorkflowResourceManager {
       resourceType: 'general',
       executionDetails: {}
     };
+
+    // 若意外仍重复，则最后再追加一个随机后缀
+    if (exists(resource.id)) {
+      resource.id = `${resource.id}_${Math.random().toString(36).slice(2, 6)}`;
+    }
+
     list.push(resource);
     this.resources.set(params.workflowId, list);
 

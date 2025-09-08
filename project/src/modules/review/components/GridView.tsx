@@ -526,7 +526,7 @@ const GridView: React.FC<GridViewProps> = ({
       </div>
       {/* 表格容器 */}
       <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto w-[100vw]">
-        <table className="table-auto border-separate border-spacing-0 min-w-max">
+        <table className="table-auto w-full border-separate border-spacing-0 min-w-max">
           {/* 表头 */}
           <thead className="bg-gray-50 sticky top-0 z-30">
             <tr>

@@ -181,6 +181,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
           : [];
         // 合并历史中的分段助手消息（不再在前端排序，保持后端顺序）
         const mergedMessages = mergeStreamingAssistantRawMessages(restoredMessages) as any[];
+        // 直接使用后端顺序（后端已按 sequence,timestamp 排序）
+        const sortedMessages = mergedMessages;
            
          // 恢复步骤
         const restoredSteps: ExecutionStep[] = Array.isArray(workflowState.steps)
@@ -228,7 +230,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = observer(({
           });
         }
         
-        setMessages(mergedMessages as unknown as TaskMessage[]);
+        setMessages(sortedMessages);
         setCurrentExecutionSteps(sortedRestoredSteps);
         
         // 恢复的工作流不应该立即设置为运行状态，因为没有活跃的流式连接

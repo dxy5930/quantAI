@@ -11,8 +11,13 @@ import { liveApi } from '../../services/api';
 import PurchaseModal from '../../components/live/PurchaseModal';
 import PromoModal from '../../components/live/PromoModal';
 
-// 从环境变量读取 WebSocket 地址
-const CHAT_WS_URL = import.meta.env.VITE_LIVE_WS_URL || 'wss://ws.postman-echo.com/raw';
+// WebSocket 地址：优先使用 .env 原样值；未设置时走默认
+const RAW_WS = (import.meta.env.VITE_LIVE_WS_URL || '').trim();
+const SCHEME = location.protocol === 'https:' ? 'wss' : 'ws';
+const CHAT_WS_URL = RAW_WS || (import.meta.env.DEV
+  ? `${SCHEME}://127.0.0.1:8000/ws/live`
+  : `${SCHEME}://${location.host}/python-api/ws/live`
+);
 
 type AccessState = Record<string, { checked: boolean; allowed: boolean; reason?: string; endAt?: string } | undefined>;
 
@@ -63,7 +68,7 @@ const LivePage: React.FC = () => {
   }, []);
 
   // 聊天（根据房间切换）
-  const chat = useLiveChat({ url: CHAT_WS_URL, autoConnect: true, room: activeChannel?.room });
+  const chat = useLiveChat({ url: CHAT_WS_URL, autoConnect: true, room: 'global' });
 
   // 精确内容高度：窗口高度 - header - footer - 外边距
   const containerRef = React.useRef<HTMLDivElement | null>(null);

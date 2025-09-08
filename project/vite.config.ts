@@ -21,11 +21,13 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           // 已切换到Python API服务，不重写路径，保持 /api/v1 前缀
           // 可通过环境变量 VITE_PYTHON_API_BASE_URL 配置API地址
+          ws: true,
         },
         "/python-api": {
           target: env.VITE_PYTHON_API_BASE_URL || "http://localhost:8000",
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/python-api/, ""),
+          ws: true,
         },
       },
     },

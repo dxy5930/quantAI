@@ -124,6 +124,8 @@ class WorkflowMessage(Base):
     status = Column(String(50), nullable=True)
     data = Column(JSON, nullable=True)
     timestamp = Column(TIMESTAMP, default=datetime.utcnow)
+    # 新增：稳定排序序号（同一workflow内递增）
+    sequence = Column(Integer, default=0)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
     

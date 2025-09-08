@@ -349,11 +349,11 @@ async def create_message(workflow_id: str, request: MessageCreateRequest, db: Se
 
 @router.get("/workflows/{workflow_id}/messages")
 async def get_messages(workflow_id: str, db: Session = Depends(get_db)):
-    """获取工作流的所有消息"""
+    """获取工作流的所有消息（后端保证顺序）"""
     try:
         messages = db.query(WorkflowMessage).filter(
             WorkflowMessage.workflow_id == workflow_id
-        ).order_by(WorkflowMessage.timestamp).all()
+        ).order_by(WorkflowMessage.sequence, WorkflowMessage.timestamp).all()
         
         return [{
             "id": m.id,
@@ -362,7 +362,8 @@ async def get_messages(workflow_id: str, db: Session = Depends(get_db)):
             "content": m.content,
             "status": m.status,
             "data": m.data,
-            "timestamp": m.timestamp.isoformat()
+            "timestamp": m.timestamp.isoformat(),
+            "sequence": m.sequence
         } for m in messages]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取消息列表失败: {str(e)}")
@@ -375,7 +376,7 @@ async def get_latest_messages(
     limit: int = 50,  # 限制返回消息数量
     db: Session = Depends(get_db)
 ):
-    """获取工作流的最新消息（支持增量更新）"""
+    """获取工作流的最新消息（支持增量更新，后端保证顺序）"""
     try:
         query = db.query(WorkflowMessage).filter(
             WorkflowMessage.workflow_id == workflow_id
@@ -391,11 +392,8 @@ async def get_latest_messages(
                 print(f"解析时间戳失败: {e}")
         
         messages = query.order_by(
-            WorkflowMessage.timestamp.desc()
+            WorkflowMessage.sequence, WorkflowMessage.timestamp
         ).limit(limit).all()
-        
-        # 按时间正序返回
-        messages.reverse()
         
         return {
             "messages": [{
@@ -405,7 +403,8 @@ async def get_latest_messages(
                 "content": m.content,
                 "status": m.status,
                 "data": m.data,
-                "timestamp": m.timestamp.isoformat()
+                "timestamp": m.timestamp.isoformat(),
+                "sequence": m.sequence
             } for m in messages],
             "count": len(messages),
             "has_more": len(messages) == limit
@@ -640,7 +639,7 @@ async def get_workflow_history(workflow_id: str, db: Session = Depends(get_db)):
         # 获取所有消息
         messages = db.query(WorkflowMessage).filter(
             WorkflowMessage.workflow_id == workflow_id
-        ).order_by(WorkflowMessage.created_at).all()
+        ).order_by(WorkflowMessage.sequence, WorkflowMessage.timestamp).all()
         
         # 格式化步骤数据
         formatted_steps = []

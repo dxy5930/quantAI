@@ -95,6 +95,9 @@ export const useStreamingChat = (options: UseStreamingChatOptions) => {
   const suggestionsGeneratedRef = useRef<Set<string>>(new Set());
   // 新增：记录已生成分析报告的消息ID，防止重复生成
   const reportsGeneratedRef = useRef<Set<string>>(new Set());
+  // 新增：本次会话内是否已收到任何数据/是否已完成
+  const hasAnyDataRef = useRef<boolean>(false);
+  const hasCompletedRef = useRef<boolean>(false);
 
   // 统一的步骤排序
   const sortSteps = useCallback((steps: ExecutionStep[]) => {
@@ -130,21 +133,19 @@ export const useStreamingChat = (options: UseStreamingChatOptions) => {
   const ensureSidebarTitle = useCallback((wfId: string | null | undefined, title: string) => {
     if (!wfId || !title) return;
     
-    // 使用更严格的锁定机制，确保标题只设置一次
+    // 使用更严格的锁定机制，确保标题只设置一次（内存 + localStorage 双保险）
     const titleLockKey = `title_set_${wfId}`;
     const globalTitleLocks: Record<string, boolean> = (window as any).__workflowTitleLocks || ((window as any).__workflowTitleLocks = {});
+    const persistedLock = (() => { try { return localStorage.getItem(titleLockKey) === '1'; } catch { return false; } })();
     
-    // 如果已经设置过标题，直接返回
-    if (globalTitleLocks[titleLockKey]) {
-      console.log(`工作流 ${wfId} 标题已经设置过，跳过本次设置`);
+    if (globalTitleLocks[titleLockKey] || persistedLock) {
       return;
     }
     
-    // 设置标题并加锁
     if ((window as any).updateSidebarTask) {
-      console.log(`首次为工作流 ${wfId} 设置标题: ${title}`);
       (window as any).updateSidebarTask(wfId, title);
       globalTitleLocks[titleLockKey] = true;
+      try { localStorage.setItem(titleLockKey, '1'); } catch {}
     }
   }, []);
 
@@ -173,6 +174,7 @@ export const useStreamingChat = (options: UseStreamingChatOptions) => {
         break;
 
       case 'start':
+        hasAnyDataRef.current = true;
         console.log('开始接收流式响应');
         onStepsUpdate(() => []);
         setState(prev => ({ ...prev, currentTaskId: aiMessageId }));
@@ -211,6 +213,7 @@ export const useStreamingChat = (options: UseStreamingChatOptions) => {
         break;
 
       case 'progress':
+        hasAnyDataRef.current = true;
         if (chunk.step && chunk.totalSteps && (chunk.content || chunk.status)) {
           // 更新进度行
           const stepKey = String(chunk.stepId || `step_${chunk.step}`);
@@ -368,6 +371,7 @@ export const useStreamingChat = (options: UseStreamingChatOptions) => {
         break;
 
       case 'content':
+        hasAnyDataRef.current = true;
         if (chunk.content) {
           onMessagesUpdate(prev => prev.map(msg => {
             if (msg.id !== aiMessageId) return msg;
@@ -386,6 +390,8 @@ export const useStreamingChat = (options: UseStreamingChatOptions) => {
         break;
 
       case 'complete':
+        hasAnyDataRef.current = true;
+        hasCompletedRef.current = true;
         // 完成处理
         onStepsUpdate(prev => prev.map(step => ({
           ...step,
@@ -595,6 +601,10 @@ export const useStreamingChat = (options: UseStreamingChatOptions) => {
   const startStreamingChat = useCallback(async (message: string) => {
     console.log('开始流式对话，message:', message);
     
+    // 重置会话标记
+    hasAnyDataRef.current = false;
+    hasCompletedRef.current = false;
+    
     // 清空建议选项
     onSuggestionsUpdate([]);
     
@@ -688,46 +698,18 @@ export const useStreamingChat = (options: UseStreamingChatOptions) => {
 
       // 处理连接错误
       eventSource.onerror = (error) => {
-        console.error('EventSource连接错误:', error);
+        // 若会话已收到数据或已完成，静默处理，避免控制台误红
+        if (hasCompletedRef.current || hasAnyDataRef.current) {
+          console.debug('EventSource已结束/已有数据，忽略错误');
+        } else {
+          console.warn('EventSource连接错误:', error);
+        }
         
         if (isUnmountingRef.current || currentConnectionIdRef.current !== connectionId) {
-          console.log('组件已卸载或非当前连接，忽略错误');
           return;
         }
         
-        // 检查是否已经处理过complete事件
-        const isTaskCompleted = (() => {
-          try {
-            // 检查当前消息是否已经完成
-            let isCompleted = false;
-            onMessagesUpdate(currentMessages => {
-              const aiMsg = currentMessages.find(msg => msg.id === aiMessageId);
-              if (aiMsg && (aiMsg.isComplete || !aiMsg.isStreaming)) {
-                isCompleted = true;
-              }
-              return currentMessages;
-            });
-            return isCompleted;
-          } catch {
-            return false;
-          }
-        })();
-        
-        // 如果任务已经完成，不显示错误信息
-        if (isTaskCompleted) {
-          console.log('任务已完成，忽略连接错误');
-          return;
-        }
-        
-        // 如果连接已经关闭，不显示错误信息
-        if (eventSource.readyState === EventSource.CLOSED) {
-          console.log('连接已正常关闭，不显示错误信息');
-          return;
-        }
-        
-        // 只有在连接正在进行中且任务未完成时才显示错误信息
-        if ((eventSource.readyState === EventSource.CONNECTING || eventSource.readyState === EventSource.OPEN)) {
-          console.warn('连接发生真正错误，显示错误信息');
+        if (!(hasCompletedRef.current || hasAnyDataRef.current)) {
           onMessagesUpdate(prev => prev.map(msg => 
             msg.id === aiMessageId 
               ? { 
@@ -739,29 +721,18 @@ export const useStreamingChat = (options: UseStreamingChatOptions) => {
                 }
               : msg
           ));
-          
-          setState(prev => ({
-            ...prev,
-            currentTaskId: null,
-            isStreaming: false,
-            isRunning: false
-          }));
         }
         
-        // 清理连接
-        try {
-          eventSource.close();
-        } catch (closeError) {
-          console.error('关闭EventSource失败:', closeError);
-        }
+        setState(prev => ({
+          ...prev,
+          currentTaskId: null,
+          isStreaming: false,
+          isRunning: false
+        }));
         
-        if (eventSourceRef.current === eventSource) {
-          eventSourceRef.current = null;
-        }
-        
-        if (currentConnectionIdRef.current === connectionId) {
-          currentConnectionIdRef.current = null;
-        }
+        try { eventSource.close(); } catch {}
+        if (eventSourceRef.current === eventSource) eventSourceRef.current = null;
+        if (currentConnectionIdRef.current === connectionId) currentConnectionIdRef.current = null;
       };
 
     } catch (error) {

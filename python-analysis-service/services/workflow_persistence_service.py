@@ -125,7 +125,7 @@ class WorkflowPersistenceService:
             ).first()
 
             if existing:
-                # 幂等更新：覆盖可变字段
+                # 幂等更新：覆盖可变字段（不回退 sequence）
                 existing.message_type = MessageType(message_data.get('type', existing.message_type.value))
                 existing.content = message_data.get('content', existing.content)
                 existing.status = message_data.get('status', existing.status)
@@ -134,6 +134,18 @@ class WorkflowPersistenceService:
                 self.db.commit()
                 logger.info(f"更新已存在消息: {existing.message_id}")
             else:
+                # 计算下一个 sequence（同一 workflow 内最大值 + 1）
+                try:
+                    max_seq = (self.db.query(WorkflowMessage)
+                        .filter(WorkflowMessage.workflow_id == workflow_id)
+                        .order_by(WorkflowMessage.sequence.desc())
+                        .limit(1)
+                        .first())
+                    next_seq = (max_seq.sequence + 1) if max_seq and isinstance(max_seq.sequence, int) else 1
+                except Exception as _e:
+                    logger.warning(f"查询最大sequence失败，回退为1: {_e}")
+                    next_seq = 1
+
                 message = WorkflowMessage(
                     id=str(uuid.uuid4()),
                     workflow_id=workflow_id,
@@ -141,11 +153,12 @@ class WorkflowPersistenceService:
                     message_type=MessageType(message_data.get('type', 'system')),
                     content=message_data.get('content', ''),
                     status=message_data.get('status'),
-                    data=message_data.get('data')
+                    data=message_data.get('data'),
+                    sequence=next_seq
                 )
                 self.db.add(message)
                 self.db.commit()
-                logger.info(f"保存消息: {message.message_id}")
+                logger.info(f"保存消息: {message.message_id} seq={next_seq}")
         except Exception as e:
             logger.error(f"保存消息失败: {e}")
             self.db.rollback()
