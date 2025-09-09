@@ -2,6 +2,7 @@ from typing import Dict, Set
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import json
 import asyncio
+import time
 import logging
 
 router = APIRouter()
@@ -110,12 +111,13 @@ async def _handle_ws(websocket: WebSocket):
                 username = str(data.get("user") or "匿名")
                 await manager.join(room, websocket, username)
                 # 系统消息：有人加入
+                server_ts = int(time.time() * 1000)
                 await manager.broadcast(room, {
                     "type": "system",
                     "event": "join",
                     "room": room,
                     "user": username,
-                    "createdAt": data.get("createdAt") or int(asyncio.get_event_loop().time() * 1000)
+                    "createdAt": server_ts
                 })
                 continue
 
@@ -127,13 +129,14 @@ async def _handle_ws(websocket: WebSocket):
                 # 容错：允许客户端每条都带room/user；否则用连接态
                 msg_room = str(data.get("room") or room or "global")
                 msg_user = str(data.get("user") or username or "匿名")
+                server_ts = int(time.time() * 1000)
                 message = {
                     "type": "chat",
-                    "id": data.get("id") or f"mid_{id(websocket)}_{int(asyncio.get_event_loop().time()*1000)}",
+                    "id": data.get("id") or f"mid_{id(websocket)}_{server_ts}",
                     "room": msg_room,
                     "user": msg_user,
                     "content": content,
-                    "createdAt": data.get("createdAt") or int(asyncio.get_event_loop().time() * 1000)
+                    "createdAt": server_ts
                 }
                 await manager.broadcast(msg_room, message)
                 continue

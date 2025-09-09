@@ -11,13 +11,8 @@ import { liveApi } from '../../services/api';
 import PurchaseModal from '../../components/live/PurchaseModal';
 import PromoModal from '../../components/live/PromoModal';
 
-// WebSocket 地址：优先使用 .env 原样值；未设置时走默认
-const RAW_WS = (import.meta.env.VITE_LIVE_WS_URL || '').trim();
-const SCHEME = location.protocol === 'https:' ? 'wss' : 'ws';
-const CHAT_WS_URL = RAW_WS || (import.meta.env.DEV
-  ? `${SCHEME}://127.0.0.1:8000/ws/live`
-  : `${SCHEME}://${location.host}/python-api/ws/live`
-);
+// WebSocket 地址：只使用 .env 中提供的值（不做判定/默认）
+const CHAT_WS_URL: string = (import.meta.env as any).VITE_LIVE_WS_URL as string;
 
 type AccessState = Record<string, { checked: boolean; allowed: boolean; reason?: string; endAt?: string } | undefined>;
 
@@ -49,6 +44,7 @@ const LivePage: React.FC = () => {
           const idFromUrl = params.get('channel');
           const initial = options.find(o => o.id === idFromUrl) || options[0];
           setActiveChannel(initial);
+          // 进入页面默认进入第一个频道的 room
           // 同步 URL（若没有）
           if (!idFromUrl) {
             params.set('channel', initial.id);
@@ -68,7 +64,8 @@ const LivePage: React.FC = () => {
   }, []);
 
   // 聊天（根据房间切换）
-  const chat = useLiveChat({ url: CHAT_WS_URL, autoConnect: true, room: 'global' });
+  const currentRoom = activeChannel?.room || activeChannel?.id || 'global';
+  const chat = useLiveChat({ url: CHAT_WS_URL, autoConnect: !!activeChannel, room: currentRoom });
 
   // 精确内容高度：窗口高度 - header - footer - 外边距
   const containerRef = React.useRef<HTMLDivElement | null>(null);

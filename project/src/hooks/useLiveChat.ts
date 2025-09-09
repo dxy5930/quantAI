@@ -53,9 +53,13 @@ export const useLiveChat = (options: UseLiveChatOptions): UseLiveChatApi => {
             id,
             user: data.user || '匿名',
             content: data.content || '',
-            createdAt: data.createdAt || Date.now(),
+            createdAt: Number(data.createdAt) || Date.now(),
           };
-          setMessages(prev => [...prev, msg]);
+          setMessages(prev => {
+            const next = [...prev, msg];
+            next.sort((a, b) => a.createdAt - b.createdAt);
+            return next;
+          });
         }
       },
     });
@@ -103,15 +107,25 @@ export const useLiveChat = (options: UseLiveChatOptions): UseLiveChatApi => {
     };
     // 乐观更新：本地先显示，并记录 id 以避免回显重复
     receivedIdsRef.current.add(id);
-    setMessages(prev => [...prev, { id, user: effectiveUsername, content: trimmed, createdAt: Date.now() }]);
+    setMessages(prev => {
+      const optimistic = { id, user: effectiveUsername, content: trimmed, createdAt: Date.now() };
+      const next = [...prev, optimistic];
+      next.sort((a, b) => a.createdAt - b.createdAt);
+      return next;
+    });
     console.debug('[LiveChat] send chat:', payload);
     ensureClient().send(payload);
   }, [ensureClient, room, effectiveUsername]);
 
+  // 连接：仅在 autoConnect 变为 true 时尝试连接，不在依赖变化时清理
   useEffect(() => {
     if (autoConnect) connect();
+  }, [autoConnect, connect]);
+
+  // 卸载时断开连接
+  useEffect(() => {
     return () => { disconnect(); };
-  }, [autoConnect, connect, disconnect]);
+  }, [disconnect]);
 
   // 监听房间变更：清空消息并发送 join
   useEffect(() => {
