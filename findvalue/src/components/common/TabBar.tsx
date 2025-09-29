@@ -83,12 +83,12 @@ const TabBar: React.FC<TabBarProps> = ({
                 )}
               </View>
               
-              {isActive && (
+              {/* {isActive && (
                 <View style={[
                   styles.activeIndicator, 
                   { backgroundColor: item.textColor?.active || defaultActiveColor }
                 ]} />
-              )}
+              )} */}
             </TouchableOpacity>
           );
         })}
