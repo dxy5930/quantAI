@@ -4,7 +4,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { observer } from 'mobx-react-lite';
 import { useStore } from '../../store';
 import type { TabScreenProps } from '../../router';
-import { createStyle } from '../../utils/scale';
+// import { createStyle } from '../../utils/scale';
 
 const HomePageBase = ({ navigation }: TabScreenProps) => {
   const { counterStore } = useStore();
@@ -66,7 +66,7 @@ const HomePageBase = ({ navigation }: TabScreenProps) => {
 
 const HomePage = observer(HomePageBase);
 
-const styles = createStyle({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
@@ -75,7 +75,7 @@ const styles = createStyle({
     justifyContent: 'center'
   },
   title: { 
-    fontSize: 32, 
+    fontSize: 64, 
     fontWeight: '700', 
     marginBottom: 32,
     color: '#2c3e50'

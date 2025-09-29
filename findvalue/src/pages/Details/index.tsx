@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import type { RootScreenProps } from '../../router';
-import { createStyle } from '../../utils/scale';
+// import { createStyle } from '../../utils/scale';
 
 const DetailsPage = ({ navigation, route }: RootScreenProps<'Details'>) => {
   const from = route.params?.from ?? '未知';
@@ -32,7 +32,7 @@ const DetailsPage = ({ navigation, route }: RootScreenProps<'Details'>) => {
   );
 };
 
-const styles = createStyle({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',

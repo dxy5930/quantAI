@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Button, StyleSheet } from 'react-native';
 import type { RootScreenProps } from '../../router';
-import { createStyle } from '../../utils/scale';
+// import { createStyle } from '../../utils/scale';
 
 const DetailsScreen = ({ navigation, route }: RootScreenProps<'Details'>) => {
   const from = route.params?.from ?? '未知';
@@ -16,7 +16,7 @@ const DetailsScreen = ({ navigation, route }: RootScreenProps<'Details'>) => {
   );
 };
 
-const styles = createStyle({
+const styles = StyleSheet.create({
   container: { flex: 1, padding: 24, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 24, fontWeight: '600', marginBottom: 16 },
   content: { fontSize: 16 },

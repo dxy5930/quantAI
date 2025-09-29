@@ -92,7 +92,9 @@ const MainTabsScreen = ({ navigation }: any) => {
 
   return (
     <View style={{ flex: 1 }}>
-      {renderCurrentScreen()}
+      <View style={{ flex: 1 }}>
+        {renderCurrentScreen()}
+      </View>
       <TabBar
         items={defaultTabItems}
         activeKey={activeTab}

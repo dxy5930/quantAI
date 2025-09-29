@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { createStyle } from '../../utils/scale';
 
 export interface TabBarItem {
   key: string;
@@ -58,7 +57,7 @@ const TabBar: React.FC<TabBarProps> = ({
               key={item.key}
               style={styles.tabItem}
               onPress={() => onTabPress(item.key)}
-              activeOpacity={0.7}
+              activeOpacity={1}
             >
               <View style={styles.tabContent}>
                 <Text style={[
@@ -98,14 +97,16 @@ const TabBar: React.FC<TabBarProps> = ({
   );
 };
 
-const styles = createStyle({
+const styles = StyleSheet.create({
   container: {
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
+    width: '100%',
   },
   tabContainer: {
     flexDirection: 'row',
     height: 60,
+    width: '100%',
   },
   tabItem: {
     flex: 1,

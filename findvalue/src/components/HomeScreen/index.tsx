@@ -3,7 +3,7 @@ import { View, Text, Button, StyleSheet } from 'react-native';
 import { observer } from 'mobx-react-lite';
 import { useStore } from '../../store';
 import type { TabScreenProps } from '../../router';
-import { createStyle } from '../../utils/scale';
+// import { createStyle } from '../../utils/scale';
 
 const HomeScreenBase = ({ navigation }: TabScreenProps) => {
   const { counterStore } = useStore();
@@ -27,7 +27,7 @@ const HomeScreenBase = ({ navigation }: TabScreenProps) => {
 
 const HomeScreen = observer(HomeScreenBase);
 
-const styles = createStyle({
+const styles = StyleSheet.create({
   container: { flex: 1, padding: 24, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 24, fontWeight: '600', marginBottom: 16 },
   counter: { fontSize: 18 },

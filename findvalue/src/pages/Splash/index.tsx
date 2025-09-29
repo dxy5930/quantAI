@@ -10,7 +10,6 @@ import {
   Animated
 } from 'react-native';
 import SplashScreen from 'react-native-splash-screen';
-import { createStyle } from '../../utils/scale';
 
 interface SplashPageProps {
   navigation: any;
@@ -124,14 +123,19 @@ const SplashPage: React.FC<SplashPageProps> = ({
 
   return (
     <View style={styles.container}>
-      <StatusBar hidden />
+      <StatusBar 
+        translucent={true}
+        backgroundColor="transparent"
+        barStyle="light-content"
+        hidden={true}
+      />
       
       {/* 全屏广告图片 */}
       <Animated.View style={[styles.imageContainer, { opacity: fadeAnim }]}>
         <Image
           source={{ uri: adImageUrl }}
           style={styles.adImage}
-          resizeMode="cover"
+          resizeMode="contain"
           onLoad={onImageLoad}
           onError={(error) => {
             console.log('Ad image load error:', error.nativeEvent.error);
@@ -145,28 +149,28 @@ const SplashPage: React.FC<SplashPageProps> = ({
         />
       </Animated.View>
 
-      {/* 倒计时显示 */}
-      <View style={styles.countdownContainer}>
+      {/* 跳过按钮和倒计时容器 */}
+      <View style={styles.topRightContainer}>
+        {/* 倒计时显示 */}
         <Text style={styles.countdownText}>{countdown}s</Text>
-      </View>
-
-      {/* 跳过按钮 */}
-      {showSkip && (
-        <Animated.View 
-          style={[
-            styles.skipContainer,
-            { opacity: skipButtonAnim }
-          ]}
-        >
-          <TouchableOpacity 
-            style={styles.skipButton}
-            onPress={handleSkip}
-            activeOpacity={0.8}
+        
+        {/* 跳过按钮 */}
+        {showSkip && (
+          <Animated.View 
+            style={[
+              styles.skipContainer,
+              { opacity: skipButtonAnim }
+            ]}
           >
-            <Text style={styles.skipText}>跳过</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      )}
+            <TouchableOpacity 
+              onPress={handleSkip}
+              activeOpacity={1}
+            >
+              <Text style={styles.skipText}>跳过</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+      </View>
 
       {/* 广告标识 */}
       <View style={styles.adLabelContainer}>
@@ -176,17 +180,22 @@ const SplashPage: React.FC<SplashPageProps> = ({
   );
 };
 
-const styles = createStyle({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: '#ffffff',
   },
   imageContainer: {
     flex: 1,
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
   },
   adImage: {
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
+    position: 'absolute',
+    top: 0,
+    left: 0,
   },
   placeholderContainer: {
     position: 'absolute',
@@ -194,7 +203,7 @@ const styles = createStyle({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#3498db',
+    backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -208,14 +217,17 @@ const styles = createStyle({
     fontSize: 14,
     color: '#ecf0f1',
   },
-  countdownContainer: {
+  topRightContainer: {
     position: 'absolute',
     top: 50,
-    right: 80,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 10,
   },
   countdownText: {
     color: '#ffffff',
@@ -223,21 +235,11 @@ const styles = createStyle({
     fontWeight: '600',
   },
   skipContainer: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-  },
-  skipButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    // 移除位置样式，因为现在在父容器内
   },
   skipText: {
-    color: '#333333',
-    fontSize: 14,
+    color: '#ffffff',
+    fontSize: 12,
     fontWeight: '600',
   },
   adLabelContainer: {

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-nati
 import { observer } from 'mobx-react-lite';
 import { useStore } from '../../store';
 import type { TabScreenProps } from '../../router';
-import { createStyle } from '../../utils/scale';
+// import { createStyle } from '../../utils/scale';
 
 const ProfilePageBase = ({ navigation }: TabScreenProps) => {
   const { counterStore } = useStore();
@@ -79,7 +79,7 @@ const ProfilePageBase = ({ navigation }: TabScreenProps) => {
 
 const ProfilePage = observer(ProfilePageBase);
 
-const styles = createStyle({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
