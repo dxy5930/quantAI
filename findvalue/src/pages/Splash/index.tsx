@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -34,54 +34,80 @@ const SplashPage: React.FC<SplashPageProps> = ({
   const [countdown, setCountdown] = useState(displayDuration);
   const [showSkip, setShowSkip] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [hasNavigated, setHasNavigated] = useState(false);
   
   // 动画值
   const fadeAnim = useState(new Animated.Value(0))[0];
   const skipButtonAnim = useState(new Animated.Value(0))[0];
 
+  // 使用 useRef 存储定时器引用
+  const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const skipTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const navigationTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const errorTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     // 如果没有广告图片URL，延迟跳转避免渲染错误
     if (!adImageUrl) {
-      setTimeout(() => {
+      navigationTimerRef.current = setTimeout(() => {
         navigateToMain();
-      }, 0);
+      }, 100);
       return;
     }
 
     // 开始倒计时
-    const clearCountdown = startCountdown();
+    startCountdown();
     
     // 延迟显示跳过按钮
-    const skipTimer = showSkipButton ? setTimeout(() => {
-      setShowSkip(true);
-      showSkipButtonAnimation();
-    }, skipButtonDelay * 1000) : null;
+    if (showSkipButton) {
+      skipTimerRef.current = setTimeout(() => {
+        setShowSkip(true);
+        showSkipButtonAnimation();
+      }, skipButtonDelay * 1000);
+    }
     
     // 清理函数
     return () => {
-      if (clearCountdown) clearCountdown();
-      if (skipTimer) clearTimeout(skipTimer);
+      clearAllTimers();
     };
   }, []); // 移除依赖项，只在组件挂载时执行一次
 
-
+  // 清理所有定时器的函数
+  const clearAllTimers = () => {
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    if (skipTimerRef.current) {
+      clearTimeout(skipTimerRef.current);
+      skipTimerRef.current = null;
+    }
+    if (navigationTimerRef.current) {
+      clearTimeout(navigationTimerRef.current);
+      navigationTimerRef.current = null;
+    }
+    if (errorTimerRef.current) {
+      clearTimeout(errorTimerRef.current);
+      errorTimerRef.current = null;
+    }
+  };
 
   const startCountdown = () => {
-    const timer = setInterval(() => {
+    countdownTimerRef.current = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
-          clearInterval(timer);
-          setTimeout(() => {
+          if (countdownTimerRef.current) {
+            clearInterval(countdownTimerRef.current);
+            countdownTimerRef.current = null;
+          }
+          navigationTimerRef.current = setTimeout(() => {
             navigateToMain();
-          }, 0);
+          }, 100);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-    
-    // 返回清理函数
-    return () => clearInterval(timer);
   };
 
   const showSkipButtonAnimation = () => {
@@ -103,13 +129,16 @@ const SplashPage: React.FC<SplashPageProps> = ({
   };
 
   const navigateToMain = () => {
+    if (hasNavigated) return; // 防止重复导航
+    setHasNavigated(true);
+    clearAllTimers(); // 导航前清理所有定时器
     navigation.replace('MainTabs');
   };
 
   const handleSkip = () => {
-    setTimeout(() => {
-      navigateToMain();
-    }, 0);
+    if (hasNavigated) return; // 防止重复导航
+    clearAllTimers(); // 清理所有定时器
+    navigateToMain();
   };
 
   // 如果没有广告图片URL，显示简单加载界面
@@ -141,10 +170,12 @@ const SplashPage: React.FC<SplashPageProps> = ({
             console.log('Ad image load error:', error.nativeEvent.error);
             // 图片加载失败时，设置状态而不是直接导航
             setImageLoaded(false);
-            // 使用setTimeout确保在下一个事件循环中执行导航
-            setTimeout(() => {
-              navigateToMain();
-            }, 1000);
+            // 使用setTimeout确保在下一个事件循环中执行导航，但要防止重复导航
+            if (!hasNavigated) {
+              errorTimerRef.current = setTimeout(() => {
+                navigateToMain();
+              }, 1000);
+            }
           }}
         />
       </Animated.View>

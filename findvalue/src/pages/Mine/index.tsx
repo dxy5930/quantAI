@@ -1,34 +1,19 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { observer } from 'mobx-react-lite';
 import { useStore } from '../../store';
 import { useNavigation } from '../../hooks';
+import { MineService } from '../../services';
 import { userStore } from '../../store/userStore';
 import type { TabScreenProps } from '../../router';
-// import { createStyle } from '../../utils/scale';
 
-const ProfilePageBase = ({ navigation }: TabScreenProps) => {
+const MinePageBase = ({ navigation }: TabScreenProps) => {
   const { counterStore } = useStore();
   const { navigateTo } = useNavigation();
 
-  // 登录用户的菜单项
-  const loggedInMenuItems = [
-    { icon: '👤', title: '个人信息', action: () => navigation.navigate('Details', { from: 'Profile-UserInfo' }) },
-    { icon: '⚙️', title: '设置', action: () => navigation.navigate('Details', { from: 'Profile-Settings' }) },
-    { icon: '📊', title: '统计', action: () => navigation.navigate('Details', { from: 'Profile-Stats' }) },
-    { icon: '🔔', title: '通知', badge: 3, action: () => navigation.navigate('Details', { from: 'Profile-Notifications' }) },
-    { icon: '💎', title: 'VIP特权', action: () => navigation.navigate('Details', { from: 'Profile-VIP' }), vipOnly: true },
-    { icon: '❓', title: '帮助', action: () => navigation.navigate('Details', { from: 'Profile-Help' }) },
-    { icon: '📞', title: '联系我们', action: () => navigation.navigate('Details', { from: 'Profile-Contact' }) },
-  ];
-
-  // 未登录用户的菜单项
-  const guestMenuItems = [
-    { icon: '❓', title: '帮助', action: () => navigation.navigate('Details', { from: 'Profile-Help' }) },
-    { icon: '📞', title: '联系我们', action: () => navigation.navigate('Details', { from: 'Profile-Contact' }) },
-    { icon: '📋', title: '用户协议', action: () => navigation.navigate('Details', { from: 'Profile-Terms' }) },
-    { icon: '🔒', title: '隐私政策', action: () => navigation.navigate('Details', { from: 'Profile-Privacy' }) },
-  ];
+  // 获取菜单项
+  const loggedInMenuItems = MineService.getLoggedInMenuItems(navigation);
+  const guestMenuItems = MineService.getGuestMenuItems(navigation);
 
   // 处理登录按钮点击
   const handleLoginPress = () => {
@@ -36,26 +21,8 @@ const ProfilePageBase = ({ navigation }: TabScreenProps) => {
   };
 
   // 处理登出
-  const handleLogout = () => {
-    Alert.alert(
-      '确认登出',
-      '您确定要退出登录吗？',
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '确定',
-          style: 'destructive',
-          onPress: async () => {
-            const success = await userStore.logout();
-            if (success) {
-              Alert.alert('提示', '已成功退出登录');
-            } else {
-              Alert.alert('错误', '退出登录失败，请重试');
-            }
-          },
-        },
-      ]
-    );
+  const handleLogout = async () => {
+    await MineService.handleLogout(userStore.logout.bind(userStore));
   };
 
   // 渲染未登录状态的用户区域
@@ -135,7 +102,7 @@ const ProfilePageBase = ({ navigation }: TabScreenProps) => {
             <TouchableOpacity 
               key={index} 
               style={[styles.menuItem, styles.disabledMenuItem]}
-              onPress={() => Alert.alert('VIP功能', '该功能仅对VIP用户开放')}
+              onPress={() => MineService.handleVipFeatureClick()}
             >
               <View style={styles.menuLeft}>
                 <Text style={styles.menuIcon}>{item.icon}</Text>
@@ -207,7 +174,7 @@ const ProfilePageBase = ({ navigation }: TabScreenProps) => {
   );
 };
 
-const ProfilePage = observer(ProfilePageBase);
+const MinePage = observer(MinePageBase);
 
 const styles = StyleSheet.create({
   container: {
@@ -401,4 +368,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ProfilePage; 
+export default MinePage; 

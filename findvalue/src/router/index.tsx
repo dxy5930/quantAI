@@ -5,7 +5,8 @@ import { createNativeStackNavigator, type NativeStackScreenProps } from '@react-
 import SplashScreen from 'react-native-splash-screen';
 import HomePage from '../pages/Home';
 import DetailsPage from '../pages/Details';
-import ProfilePage from '../pages/Profile';
+import MinePage from '../pages/Mine';
+import LoginPage from '../pages/Login';
 import SplashPage from '../pages/Splash';
 import TabBar, { TabBarItem } from '../components/common/TabBar';
 import type { AdConfig } from '../hooks/useAppInit';
@@ -14,9 +15,10 @@ export type RootStackParamList = {
   Splash: { adConfig: AdConfig | null } | undefined;
   MainTabs: undefined;
   Details: { from?: string } | undefined;
+  Login: undefined;
 };
 
-export type TabScreens = 'Home' | 'Profile';
+export type TabScreens = 'Home' | 'Mine';
 
 interface AppNavigatorProps {
   initialRoute: 'Splash' | 'MainTabs';
@@ -41,7 +43,7 @@ const defaultTabItems: TabBarItem[] = [
     }
   },
   { 
-    key: 'Profile', 
+    key: 'Mine', 
     title: '我的', 
     icon: {
       active: '👤',   // 激活状态：实心人像
@@ -83,8 +85,8 @@ const MainTabsScreen = ({ navigation }: any) => {
     switch (activeTab) {
       case 'Home':
         return <HomePage navigation={navigation} route={{ key: 'Home', name: 'Home' as any }} />;
-      case 'Profile':
-        return <ProfilePage navigation={navigation} route={{ key: 'Profile', name: 'Profile' as any }} />;
+      case 'Mine':
+        return <MinePage navigation={navigation} route={{ key: 'Mine', name: 'Mine' as any }} />;
       default:
         return <HomePage navigation={navigation} route={{ key: 'Home', name: 'Home' as any }} />;
     }
@@ -127,6 +129,17 @@ const AppNavigator: React.FC<AppNavigatorProps> = ({ initialRoute, hasNetwork, a
         />
         <Stack.Screen name="MainTabs" component={MainTabsScreen} />
         <Stack.Screen name="Details" component={DetailsPage} />
+        <Stack.Screen 
+          name="Login" 
+          component={LoginPage}
+          options={{
+            headerShown: true,
+            title: '登录',
+            headerStyle: { backgroundColor: '#f8f9fa' },
+            headerTitleStyle: { color: '#2c3e50' },
+            headerTintColor: '#3498db',
+          }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
