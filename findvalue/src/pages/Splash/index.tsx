@@ -47,15 +47,7 @@ const SplashPage: React.FC<SplashPageProps> = ({
   const errorTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // 如果没有广告图片URL，延迟跳转避免渲染错误
-    if (!adImageUrl) {
-      navigationTimerRef.current = setTimeout(() => {
-        navigateToMain();
-      }, 100);
-      return;
-    }
-
-    // 开始倒计时
+    // 开始倒计时（无论是否有广告图片）
     startCountdown();
     
     // 延迟显示跳过按钮
@@ -141,13 +133,14 @@ const SplashPage: React.FC<SplashPageProps> = ({
     navigateToMain();
   };
 
-  // 如果没有广告图片URL，显示简单加载界面
+  // 如果没有广告图片URL，直接跳转到主页面
   if (!adImageUrl) {
-    return (
-      <View style={styles.container}>
-        <StatusBar hidden />
-      </View>
-    );
+    useEffect(() => {
+      // 立即跳转到主页面
+      navigation.replace('MainTabs');
+    }, []);
+    
+    return null; // 不渲染任何内容
   }
 
   return (
@@ -214,7 +207,31 @@ const SplashPage: React.FC<SplashPageProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#1a1a1a',
+  },
+  logoContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoWrapper: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logo: {
+    width: SCREEN_WIDTH * 0.6,
+    height: SCREEN_HEIGHT * 0.3,
+    maxWidth: 300,
+    maxHeight: 200,
+  },
+  countdownContainer: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
   imageContainer: {
     flex: 1,

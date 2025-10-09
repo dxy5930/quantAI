@@ -11,6 +11,8 @@ export interface AppInitConfig {
   enableAd?: boolean;
   // 调试模式
   debugMode?: boolean;
+  // 是否启用快速启动（跳过所有初始化检查）
+  fastStart?: boolean;
 }
 
 export interface AppInitState {
@@ -43,10 +45,11 @@ export interface AdConfig {
 }
 
 const defaultConfig: Required<AppInitConfig> = {
-  networkTimeout: 5000,
+  networkTimeout: 10000, // 增加默认网络超时时间到10秒
   adConfigApi: '/api/ad-config',
   enableAd: true,
   debugMode: __DEV__,
+  fastStart: false,
 };
 
 export const useAppInit = (config: AppInitConfig = {}): AppInitState => {
@@ -61,7 +64,39 @@ export const useAppInit = (config: AppInitConfig = {}): AppInitState => {
   });
 
   useEffect(() => {
+    // 如果启用快速启动，直接初始化
+    if (finalConfig.fastStart) {
+      setState({
+        isInitialized: true,
+        hasNetwork: true,
+        initialRoute: 'MainTabs',
+        adConfig: null,
+        error: null,
+      });
+      
+      return;
+    }
+
+    // 设置超时机制，确保应用不会卡在启动屏
+    const timeoutId = setTimeout(() => {
+      if (!state.isInitialized) {
+        console.warn('App initialization timeout, forcing initialization');
+        setState({
+          isInitialized: true,
+          hasNetwork: false,
+          initialRoute: 'MainTabs',
+          adConfig: null,
+          error: 'Initialization timeout',
+        });
+        
+      }
+    }, 15000); // 15秒超时
+
     initializeApp();
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
   }, []);
 
   const initializeApp = async () => {
@@ -75,7 +110,7 @@ export const useAppInit = (config: AppInitConfig = {}): AppInitState => {
         adConfig = await fetchAdConfig();
       }
       
-      // 3. 决定初始路由
+      // 3. 决定初始路由 - 根据广告配置决定
       const initialRoute = shouldShowSplash(hasNetwork, adConfig) ? 'Splash' : 'MainTabs';
       
       // 4. 更新状态
@@ -87,12 +122,7 @@ export const useAppInit = (config: AppInitConfig = {}): AppInitState => {
         error: null,
       });
 
-      // 5. 启动屏关闭逻辑：不显示广告时直接关闭
-      if (!shouldShowSplash(hasNetwork, adConfig)) {
-        if (SplashScreen && typeof SplashScreen.hide === 'function') {
-          SplashScreen.hide();
-        }
-      }
+      // 5. 启动屏关闭逻辑：由App.tsx统一控制
       
       if (finalConfig.debugMode) {
         console.log('App initialization completed:', {
@@ -104,19 +134,15 @@ export const useAppInit = (config: AppInitConfig = {}): AppInitState => {
     } catch (error) {
       console.error('App initialization error:', error);
       
-      // 初始化失败时的降级处理
+      // 初始化失败时的降级处理 - 确保应用能正常启动
       setState({
         isInitialized: true,
         hasNetwork: false,
-        initialRoute: 'MainTabs',
+        initialRoute: 'MainTabs', // 即使出错也直接进入主页面
         adConfig: null,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
 
-      // 初始化失败时立即关闭启动屏
-      if (SplashScreen && typeof SplashScreen.hide === 'function') {
-        SplashScreen.hide();
-      }
     }
   };
 
@@ -128,13 +154,19 @@ export const useAppInit = (config: AppInitConfig = {}): AppInitState => {
       });
 
       const networkPromise = NetInfo.fetch().then(state => {
-        return state.isConnected === true && state.isInternetReachable === true;
+        // 更宽松的网络检测条件
+        if (state.isConnected === true) {
+          // 如果有连接，即使无法确定互联网可达性也认为有网络
+          return state.isInternetReachable !== false;
+        }
+        return false;
       });
 
       return await Promise.race([networkPromise, timeoutPromise]);
     } catch (error) {
       console.warn('Network check failed:', error);
-      return false;
+      // 网络检测失败时，假设有网络连接，让应用继续运行
+      return true;
     }
   };
 
@@ -184,16 +216,10 @@ export const useAppInit = (config: AppInitConfig = {}): AppInitState => {
     }
   };
 
-  // 判断是否需要显示Splash页面
+  // 判断是否需要显示Splash页面 - 根据广告配置决定
   const shouldShowSplash = (hasNetwork: boolean, adConfig: AdConfig | null): boolean => {
-    // 没有网络时不显示
-    if (!hasNetwork) return false;
-    
-    // 没有广告配置时不显示
-    if (!adConfig) return false;
-    
-    // 根据广告配置决定
-    return adConfig.showAd === true && !!adConfig.imageUrl;
+    // 如果有网络且有广告配置，则显示Splash页面
+    return hasNetwork && adConfig !== null && adConfig.showAd === true;
   };
 
   return state;

@@ -383,11 +383,11 @@ export class UserStore {
   }
 
   // 私有方法
-  private setLoading(loading: boolean): void {
+  setLoading(loading: boolean): void {
     this.isLoading = loading;
   }
 
-  private setError(error: string | null): void {
+  setError(error: string | null): void {
     this.error = error;
   }
 

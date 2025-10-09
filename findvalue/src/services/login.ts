@@ -1,11 +1,11 @@
-import { runInAction } from 'mobx';
-import { BusinessError } from '../utils/axios';
+import {runInAction} from 'mobx';
+import {BusinessError} from '../utils/axios';
 import * as AuthApi from '../api/auth';
-import type { UserInfo } from '../types/user';
+import type {UserInfo} from '../types/user';
 
 /**
  * 登录服务层
- * 
+ *
  * 负责登录业务逻辑处理，调用 Auth API 层
  */
 
@@ -28,24 +28,27 @@ export class Login {
   /**
    * 验证登录表单
    */
-  static validateForm(username: string, password: string): { isValid: boolean; message?: string } {
+  static validateForm(
+    username: string,
+    password: string,
+  ): {isValid: boolean; message?: string} {
     if (!username.trim()) {
-      return { isValid: false, message: '请输入用户名' };
+      return {isValid: false, message: '请输入用户名'};
     }
-    
+
     if (username.length < 3) {
-      return { isValid: false, message: '用户名至少需要3个字符' };
+      return {isValid: false, message: '用户名至少需要3个字符'};
     }
-    
+
     if (!password.trim()) {
-      return { isValid: false, message: '请输入密码' };
+      return {isValid: false, message: '请输入密码'};
     }
-    
+
     if (password.length < 6) {
-      return { isValid: false, message: '密码至少需要6个字符' };
+      return {isValid: false, message: '密码至少需要6个字符'};
     }
-    
-    return { isValid: true };
+
+    return {isValid: true};
   }
 
   /**
@@ -62,13 +65,13 @@ export class Login {
       // 调用 Auth API
       const result = await AuthApi.login({
         username: request.username.trim(),
-        password: request.password
+        password: request.password,
       });
-      
+
       return {
         userInfo: result.data.userInfo,
         authToken: result.data.authToken,
-        refreshToken: result.data.refreshToken
+        refreshToken: result.data.refreshToken,
       };
     } catch (error) {
       // 如果是BusinessError，直接抛出（已经被axios处理过了）
@@ -89,10 +92,10 @@ export class Login {
     if (!validation.isValid) {
       throw new BusinessError(validation.message!);
     }
-    
+
     // 模拟网络延迟
     await new Promise(resolve => setTimeout(resolve, 1500));
-    
+
     // 模拟用户数据
     const userInfo: UserInfo = {
       id: Date.now().toString(),
@@ -104,14 +107,18 @@ export class Login {
       isVip: Math.random() > 0.5,
       level: Math.floor(Math.random() * 10) + 1,
     };
-    
-    const authToken = `token_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const refreshToken = `refresh_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
+    const authToken = `token_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    const refreshToken = `refresh_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+
     return {
       userInfo,
       authToken,
-      refreshToken
+      refreshToken,
     };
   }
 
@@ -122,8 +129,8 @@ export class Login {
     request: LoginRequest,
     loginHook: (data: LoginData) => Promise<boolean>,
     onLoadingChange: (loading: boolean) => void,
-    useSimulation: boolean = true // 开发阶段使用模拟API
-  ): Promise<{ success: boolean; message?: string }> {
+    useSimulation: boolean = true, // 开发阶段使用模拟API
+  ): Promise<{success: boolean; message?: string}> {
     try {
       // 设置加载状态
       runInAction(() => {
@@ -131,27 +138,27 @@ export class Login {
       });
 
       // 调用登录API（模拟或真实）
-      const loginData = useSimulation 
-        ? await this.simulateApi(request)
-        : await this.callApi(request);
-
+      // const loginData = useSimulation
+      //   ? await this.simulateApi(request)
+      //   : await this.callApi(request);
+      const loginData = await this.simulateApi(request);
       // 保存登录信息
       const saveSuccess = await loginHook(loginData);
-      
+
       if (!saveSuccess) {
         throw new BusinessError('保存用户信息失败，请重试');
       }
 
-      return { success: true };
+      return {success: true};
     } catch (error) {
+      console.log('error', error);
       // BusinessError已经包含了友好的错误消息
-      const message = error instanceof BusinessError 
-        ? error.message 
-        : '登录失败，请稍后重试';
-        
+      const message =
+        error instanceof BusinessError ? error.message : '登录失败，请稍后重试';
+
       return {
         success: false,
-        message
+        message,
       };
     } finally {
       // 清除加载状态
@@ -168,13 +175,13 @@ export class Login {
     if (type === 'demo') {
       return {
         username: 'demo',
-        password: '123456'
+        password: '123456',
       };
     } else {
       return {
         username: 'vipuser',
-        password: 'vip123456'
+        password: 'vip123456',
       };
     }
   }
-} 
+}

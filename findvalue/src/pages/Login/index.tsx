@@ -34,7 +34,7 @@ const LoginPageBase: React.FC<LoginPageProps> = () => {
     // 执行登录流程
     const result = await LoginService.perform(
       { username, password },
-      userStore.login,
+      (data) => userStore.login(data),
       setIsLoading
     );
 

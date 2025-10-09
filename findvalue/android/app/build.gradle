@@ -82,6 +82,36 @@ android {
         versionCode 1
         versionName "1.0"
     }
+
+    // 构建变体配置
+    flavorDimensions "environment"
+    productFlavors {
+        dev {
+            dimension "environment"
+            applicationIdSuffix project.hasProperty('APP_ID_SUFFIX') ? project.APP_ID_SUFFIX : ".dev"
+            versionNameSuffix project.hasProperty('VERSION_SUFFIX') ? project.VERSION_SUFFIX : "-dev"
+            resValue "string", "app_name", project.hasProperty('APP_NAME') ? project.APP_NAME : "FindValue Dev"
+        }
+        qa {
+            dimension "environment"
+            applicationIdSuffix project.hasProperty('APP_ID_SUFFIX') ? project.APP_ID_SUFFIX : ".qa"
+            versionNameSuffix project.hasProperty('VERSION_SUFFIX') ? project.VERSION_SUFFIX : "-qa"
+            resValue "string", "app_name", project.hasProperty('APP_NAME') ? project.APP_NAME : "FindValue QA"
+        }
+        staging {
+            dimension "environment"
+            applicationIdSuffix project.hasProperty('APP_ID_SUFFIX') ? project.APP_ID_SUFFIX : ".staging"
+            versionNameSuffix project.hasProperty('VERSION_SUFFIX') ? project.VERSION_SUFFIX : "-staging"
+            resValue "string", "app_name", project.hasProperty('APP_NAME') ? project.APP_NAME : "FindValue Staging"
+        }
+        prod {
+            dimension "environment"
+            applicationIdSuffix project.hasProperty('APP_ID_SUFFIX') ? project.APP_ID_SUFFIX : ""
+            versionNameSuffix project.hasProperty('VERSION_SUFFIX') ? project.VERSION_SUFFIX : ""
+            resValue "string", "app_name", project.hasProperty('APP_NAME') ? project.APP_NAME : "FindValue"
+        }
+    }
+
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
@@ -89,15 +119,24 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            // 生产环境签名配置
+            storeFile file('release.keystore')
+            storePassword System.getenv("KEYSTORE_PASSWORD") ?: "password"
+            keyAlias System.getenv("KEY_ALIAS") ?: "findvalue"
+            keyPassword System.getenv("KEY_PASSWORD") ?: "password"
+        }
     }
+
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            debuggable true
+            minifyEnabled false
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
+            debuggable false
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }

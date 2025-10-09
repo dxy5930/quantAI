@@ -25,8 +25,6 @@ const HomePageBase = ({navigation}: TabScreenProps) => {
 
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.title}>FindValue</Text>
-
       <GestureDetector gesture={doubleTap}>
         <View style={styles.counterContainer}>
           <Text style={styles.counter}>计数：{counterStore.value}</Text>

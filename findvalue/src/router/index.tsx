@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator, type NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -77,6 +77,7 @@ const SplashScreenWrapper = ({ navigation, route }: any) => {
 const MainTabsScreen = ({ navigation }: any) => {
   const [activeTab, setActiveTab] = useState<TabScreens>('Home');
 
+
   const handleTabPress = (key: string) => {
     setActiveTab(key as TabScreens);
   };
@@ -113,9 +114,7 @@ const AppNavigator: React.FC<AppNavigatorProps> = ({ initialRoute, hasNetwork, a
   return (
     <NavigationContainer
       onReady={() => {
-        if (SplashScreen && typeof SplashScreen.hide === 'function') {
-          SplashScreen.hide();
-        }
+        // 不在这里关闭启动屏，让目标页面自己控制关闭时机
       }}
     >
       <Stack.Navigator 
